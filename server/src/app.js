@@ -4,7 +4,7 @@ const app = express()
 const bodyParser = require('body-parser')
 const compression = require('compression')
 
-const { handleGithubWebhook } = require('./server_api')
+const { handleGithubWebhook } = require('./serverAPI')
 const whitelist = require('./whitelist')
 
 const allowCrossDomain = function (req, res, next) {
