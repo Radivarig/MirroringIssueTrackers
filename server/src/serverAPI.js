@@ -4,6 +4,9 @@ import type {
   Issue,
 } from './types'
 
+import request from 'superagent'
+import youtrackRest from "./youtrackRest"
+
 export const handleGithubWebhook = {
   async handlePostRequest (req, res) {
     const rb = req.body
@@ -16,14 +19,14 @@ export const handleGithubWebhook = {
         const repository: Repository = handleGithubWebhook.getRepository (rb.repository)
 
         // make API call with this issue
-        console.log ({issue, user, repository})
-        return res.send ()
+        const responseBody = await youtrackRest ("get", "/user/current", {})
+          .then ((response) => response.body)
+
+        console.log ({responseBody})
       }
     }
-
     // respond with empty
     res.send ()
-
   },
 
   getUser: (rawUser: Object): User => ({
