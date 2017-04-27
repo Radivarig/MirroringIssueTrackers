@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    "transform-react-jsx",
+    "transform-flow-strip-types",
+    "transform-object-rest-spread",
+    ["flow-runtime", {
+        "assert": true,
+    }],
+
+  ]
+}
