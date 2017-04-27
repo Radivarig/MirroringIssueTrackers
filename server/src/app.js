@@ -21,6 +21,6 @@ app.use(allowCrossDomain)
 app.use(bodyParser.json())
 app.enable('trust proxy')
 
-app.post('/github_webhook', handleGithubWebhook)
+app.post('/github_webhook', handleGithubWebhook.handlePostRequest)
 
 module.exports = app
