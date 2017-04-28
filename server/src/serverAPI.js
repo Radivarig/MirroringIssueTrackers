@@ -24,7 +24,7 @@ export const handleGithubWebhook = {
           query: {
             project: "GI",
             summary: issue.title,
-            description: issue.body,
+            description: issue.body  + "\n--\nOpened by UserID: " + user.id,
           }})
           .catch (err => console.log ({err}))
           .then ((response) => response.body)
