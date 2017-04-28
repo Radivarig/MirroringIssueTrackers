@@ -18,11 +18,18 @@ export const handleGithubWebhook = {
         const user: User = handleGithubWebhook.getUser (rb.issue.user)
         const repository: Repository = handleGithubWebhook.getRepository (rb.repository)
 
-        // make API call with this issue
-        const responseBody = await youtrackRest ("get", "/user/current", {})
+        const projects = await youtrackRest ({
+          method: "put",
+          url: "issue",
+          query: {
+            project: "GI",
+            summary: issue.title,
+            description: issue.body,
+          }})
+          .catch (err => console.log ({err}))
           .then ((response) => response.body)
 
-        console.log ({responseBody})
+        console.log ({projects})
       }
     }
     // respond with empty
