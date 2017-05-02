@@ -24,13 +24,22 @@ export const handleWebhook = {
     console.log ({rawIssue})
     const issue: Issue = handleWebhook.getters.youtrack.getFormatedIssue (rawIssue)
 
+    // if this is the mirrored issue, return
+    if (issue.body.indexOf ("<!--jsoninfo=") !== -1) {
+      res.send ()
+      return
+    }
+
+    const hiddenDataJSON = {mirrorId: rb.id}
+    const hiddenData = `<!--jsoninfo=${JSON.stringify(hiddenDataJSON)}-->`
+
     const putIssueResponse = await integrationRest({
       service: "github",
       method: "post",
-      url: `repos/${"config.github.user"}/${config.github.repo}/issues`,
+      url: `repos/${config.github.user}/${config.github.repo}/issues`,
       data: {
         title: issue.title,
-        body: issue.body,
+        body: `${issue.body}\n\n${hiddenData}`,
         // fill issue details
       },
     })
@@ -43,13 +52,22 @@ export const handleWebhook = {
   async handleGithubRequest (req, res) {
     const rb = req.body
     // console.log ("github webhook", rb.action)
-    // todo: return to avoid loop, remember id to skip mirroring the mirror
-    return
+
     if (rb.issue) {
       if (rb.action === "opened") {
         const issue: Issue = handleWebhook.getters.github.getFormatedIssue (rb.issue)
+
+        // if this is the mirrored issue, return
+        if (issue.body.indexOf ("<!--jsoninfo=") !== -1) {
+          res.send ()
+          return
+        }
+
         // todo: link to original
-        const signature = `{html}<a href=${"asdf"}>Open the original on GitHub</a>{html}`
+        // const signature = `{html}<a href=${"asdf"}>Open the original on GitHub</a>{html}`
+
+        const hiddenDataJSON = {mirrorId: rb.id}
+        const hiddenData = `<!--jsoninfo=${JSON.stringify(hiddenDataJSON)}-->`
 
         const putIssueResponse = await integrationRest ({
           service: "youtrack",
@@ -58,7 +76,7 @@ export const handleWebhook = {
           query: {
             project: "GI",
             summary: issue.title,
-            description: `${issue.body}\n--\n${signature}`,
+            description: `${issue.body}\n\n{html}${hiddenData}{html}`,
           },
         })
         .catch ((err) => console.log ({err}))
