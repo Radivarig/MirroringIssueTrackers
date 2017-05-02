@@ -4,7 +4,7 @@ const app = express()
 const bodyParser = require('body-parser')
 const compression = require('compression')
 
-const { handleGithubWebhook } = require('./serverAPI')
+const { handleWebhook } = require('./serverAPI')
 const whitelist = require('./whitelist')
 
 const allowCrossDomain = function (req, res, next) {
@@ -21,6 +21,7 @@ app.use(allowCrossDomain)
 app.use(bodyParser.json())
 app.enable('trust proxy')
 
-app.post('/github_webhook', handleGithubWebhook.handlePostRequest)
+app.post('/github_webhook', handleWebhook.handleGithubRequest)
+app.post('/youtrack_webhook', handleWebhook.handleYoutrackRequest)
 
 module.exports = app

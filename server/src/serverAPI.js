@@ -7,16 +7,23 @@ import type {
 import request from 'superagent'
 import youtrackRest from "./youtrackRest"
 
-export const handleGithubWebhook = {
-  async handlePostRequest (req, res) {
+export const handleWebhook = {
+  async handleYoutrackRequest (req, res) {
     const rb = req.body
-    // console.log ("webhook", rb.action)
+    console.log ("youtrack webhook", rb)
+    res.send ()
+
+  },
+
+  async handleGithubRequest (req, res) {
+    const rb = req.body
+    // console.log ("webhook", rb)
 
     if (rb.issue) {
       if (rb.action === "opened") {
-        const issue: Issue = handleGithubWebhook.getIssue.fromOpenned (rb.issue)
-        const user: User = handleGithubWebhook.getUser (rb.issue.user)
-        const repository: Repository = handleGithubWebhook.getRepository (rb.repository)
+        const issue: Issue = handleWebhook.getIssue.fromOpenned (rb.issue)
+        const user: User = handleWebhook.getUser (rb.issue.user)
+        const repository: Repository = handleWebhook.getRepository (rb.repository)
 
         const projects = await youtrackRest ({
           method: "put",
@@ -24,9 +31,9 @@ export const handleGithubWebhook = {
           query: {
             project: "GI",
             summary: issue.title,
-            description: issue.body  + "\n--\nOpened by UserID: " + user.id,
+            description: `${issue.body}\n--\nOpened by UserID: ${user.id}`,
           }})
-          .catch (err => console.log ({err}))
+          .catch ((err) => console.log ({err}))
           .then ((response) => response.body)
 
         console.log ({projects})
