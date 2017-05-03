@@ -10,6 +10,7 @@ import {throwIfValueNotAllowed} from './helpers'
 const tempStore = {
   // {serviceName: stringId, serviceName2: stringId}
   // projectMappings: ..
+  // issueMappings: [{"github": "37","youtrack": "GI-62"}],
   issueMappings: [],
 }
 // known: {serviceName: stringId}, {newService: stringId}
@@ -51,6 +52,7 @@ export const webhookHandler = {
       // if this is the mirrored issue
       if (issue.body.indexOf (mirrorMetaVarName) !== -1) {
         const issueMeta = webhookHandler.getIssueMetaFromBody (issue.body)
+
         addIssueMapping ({
           knownService: issueMeta.service,
           knownId: issueMeta.id,
@@ -61,11 +63,14 @@ export const webhookHandler = {
       else {
         addIssueMapping ({newService: service, newId: issue.id})
 
+        // create mirror
         const createNewIssueResponse = await webhookHandler.createNewIssue (service, issue)
         console.log ({createNewIssueResponse})
-
       }
-
+    }
+    else if (rb.action === "edited") {
+      const updateIssueResponse = await webhookHandler.updateIssue (service, issue)
+      console.log ({updateIssueResponse})
     }
 
   },
@@ -134,6 +139,48 @@ export const webhookHandler = {
 
     if (targetService === "youtrack")
       return `${issue.body}\n\n{html}${issueHtmlComment}{html}`
+  },
+
+  updateIssue: async (originService: string, issue: Issue) => {
+    if (originService === "youtrack") {
+      const targetService = "github"
+      throw "not implemented"
+
+      return await integrationRest({
+        service: targetService,
+        method: "post",
+        url: `repos/${config.github.user}/${config.github.repo}/issues`,
+        data: {
+          title: issue.title,
+          body: webhookHandler.getIssueBody (originService, targetService, issue),
+        },
+      })
+      .catch ((err) => console.log ({err}))
+      .then ((response) => response.body)
+    }
+
+    if (originService === "github") {
+      const targetService = "youtrack"
+
+      // todo: check if exists before accessing over index
+      const mirrorId = tempStore.issueMappings.filter (
+        (f) => f[originService] === issue.id
+      )[0][targetService]
+
+      return await integrationRest ({
+        service: targetService,
+        method: "post",
+        url: `issue/${mirrorId}`,
+        query: {
+          // todo: move to issue.project
+          project: "GI",
+          summary: issue.title,
+          description: webhookHandler.getIssueBody (originService, targetService, issue),
+        },
+      })
+      .catch ((err) => console.log ({err}))
+      .then ((response) => response.body)
+    }
   },
 
   createNewIssue: async (originService: string, issue: Issue) => {
