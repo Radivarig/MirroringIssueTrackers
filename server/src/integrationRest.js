@@ -1,11 +1,7 @@
 import config from '../config/integration.config'
 import request from 'superagent'
 import path from 'path'
-
-const throwIfValueNotAllowed = (value, allowed: Array) => {
-  if (allowed.indexOf (value) === -1)
-    throw `Parameter \`${value}\` has to be: ${allowed.join (" | ")}`
-}
+import {throwIfValueNotAllowed} from './helpers'
 
 export default async (opts) => {
   // options types
