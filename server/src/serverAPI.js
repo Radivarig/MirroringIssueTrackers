@@ -7,6 +7,30 @@ import config from "../config/integration.config"
 
 import {throwIfValueNotAllowed} from './helpers'
 
+const tempStore = {
+  // {serviceName: stringId, serviceName2: stringId}
+  // projectMappings: ..
+  issueMappings: [],
+}
+// known: {serviceName: stringId}, {newService: stringId}
+const addIssueMapping = ({knownService, knownId, newService, newId}) => {
+  if (knownService === undefined) {
+    const mapping = {}
+    mapping[newService] = newId
+    tempStore.issueMappings.push (mapping)
+  }
+  else {
+    for (const mapping of tempStore.issueMappings) { // iterate array
+      for (const service in mapping) { // iterate keys
+        // if known service ids match
+        if (service === knownService && mapping[service] === knownId)
+          // horrible mutable adding new service and id
+          mapping[newService] = newId
+      }
+    }
+  }
+}
+
 const mirrorMetaVarName = "MIRROR_META"
 
 export const webhookHandler = {
@@ -23,13 +47,25 @@ export const webhookHandler = {
 
     console.log ({action: rb.action, issue})
 
-    // if this is the mirrored issue, return
-    if (issue.body.indexOf (mirrorMetaVarName) !== -1)
-      return
-
     if (rb.action === "opened") {
-      const createNewIssueResponse = await webhookHandler.createNewIssue (service, issue)
-      console.log ({createNewIssueResponse})
+      // if this is the mirrored issue
+      if (issue.body.indexOf (mirrorMetaVarName) !== -1) {
+        const issueMeta = webhookHandler.getIssueMetaFromBody (issue.body)
+        addIssueMapping ({
+          knownService: issueMeta.service,
+          knownId: issueMeta.id,
+          newService: service,
+          newId: issue.id,
+        })
+      }
+      else {
+        addIssueMapping ({newService: service, newId: issue.id})
+
+        const createNewIssueResponse = await webhookHandler.createNewIssue (service, issue)
+        console.log ({createNewIssueResponse})
+
+      }
+
     }
 
   },
@@ -73,20 +109,14 @@ export const webhookHandler = {
 
   wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
 
-/*
-  getIssueMeta: (issue: Issue) => ({
-    id: issue.id,
-    // created time,
-    // last modified time,
-    // author,
-    // project,
-    // origin,
-  }),
-
-  getIssueMetaAsHtmlComment: (issue: Issue): string => {
-    return webhookHandler.wrapStringToHtmlComment (JSON.stringify (webhookHandler.getIssueMeta))
+  getIssueMetaFromBody: (issueBody): Object | void => {
+    const varStart = `<!--${mirrorMetaVarName}=`
+    const varEnd = "-->"
+    const regexStr = `${varStart}(.*)${varEnd}`
+    const regexRE = issueBody.match(new RegExp(regexStr))
+    if (regexRE && regexRE.length > 1)
+      return JSON.parse(regexRE[1])
   },
-*/
 
   getIssueBody: (originService, targetService, issue: Issue) => {
     const issueMetaData = {
