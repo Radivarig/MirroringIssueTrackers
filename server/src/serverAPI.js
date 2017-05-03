@@ -7,7 +7,8 @@ import config from "../config/integration.config"
 
 import {throwIfValueNotAllowed} from './helpers'
 
-const issueIsMirrorString = "_ISSUE_IS_MIRROR_"
+const mirrorMetaVarName = "MIRROR_META"
+
 export const webhookHandler = {
   handleRequest: async (service, req, res) => {
     // respond so that youtrack doesn't hang (todo, solve in workflow)
@@ -23,7 +24,7 @@ export const webhookHandler = {
     console.log ({action: rb.action, issue})
 
     // if this is the mirrored issue, return
-    if (issue.body.indexOf (issueIsMirrorString) !== -1)
+    if (issue.body.indexOf (mirrorMetaVarName) !== -1)
       return
 
     if (rb.action === "opened") {
@@ -86,14 +87,23 @@ export const webhookHandler = {
     return webhookHandler.wrapStringToHtmlComment (JSON.stringify (webhookHandler.getIssueMeta))
   },
 */
-  getIssueBody: (targetService, issue: Issue) => {
-    const issueIsMirrorComment = webhookHandler.wrapStringToHtmlComment (issueIsMirrorString)
+
+  getIssueBody: (originService, targetService, issue: Issue) => {
+    const issueMetaData = {
+      id: issue.id,
+      project: issue.project,
+      service: originService,
+    }
+
+    const issueHtmlComment = webhookHandler.wrapStringToHtmlComment (
+      `${mirrorMetaVarName}=${JSON.stringify (issueMetaData)}`
+    )
 
     if (targetService === "github")
-      return `${issue.body}\n\n${issueIsMirrorComment}`
+      return `${issue.body}\n\n${issueHtmlComment}`
 
     if (targetService === "youtrack")
-      return `${issue.body}{html}${issueIsMirrorComment}{html}`
+      return `${issue.body}\n\n{html}${issueHtmlComment}{html}`
   },
 
   createNewIssue: async (originService: string, issue: Issue) => {
@@ -106,7 +116,7 @@ export const webhookHandler = {
         url: `repos/${config.github.user}/${config.github.repo}/issues`,
         data: {
           title: issue.title,
-          body: webhookHandler.getIssueBody (targetService, issue),
+          body: webhookHandler.getIssueBody (originService, targetService, issue),
         },
       })
       .catch ((err) => console.log ({err}))
@@ -124,7 +134,7 @@ export const webhookHandler = {
           // todo: move to issue.project
           project: "GI",
           summary: issue.title,
-          description: webhookHandler.getIssueBody (targetService, issue),
+          description: webhookHandler.getIssueBody (originService, targetService, issue),
         },
       })
       .catch ((err) => console.log ({err}))
