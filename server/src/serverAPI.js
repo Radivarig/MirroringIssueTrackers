@@ -7,6 +7,7 @@ import config from "../config/integration.config"
 
 import {throwIfValueNotAllowed} from './helpers'
 
+const issueIsMirrorString = "_ISSUE_IS_MIRROR_"
 export const webhookHandler = {
   handleRequest: async (service, req, res) => {
     // respond so that youtrack doesn't hang (todo, solve in workflow)
@@ -22,7 +23,7 @@ export const webhookHandler = {
     console.log ({action: rb.action, issue})
 
     // if this is the mirrored issue, return
-    if (issue.body.indexOf ("<!--jsoninfo=") !== -1)
+    if (issue.body.indexOf (issueIsMirrorString) !== -1)
       return
 
     if (rb.action === "opened") {
@@ -69,27 +70,43 @@ export const webhookHandler = {
     }
   },
 
+  wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
+
+/*
+  getIssueMeta: (issue: Issue) => ({
+    id: issue.id,
+    // created time,
+    // last modified time,
+    // author,
+    // project,
+    // origin,
+  }),
+
+  getIssueMetaAsHtmlComment: (issue: Issue): string => {
+    return webhookHandler.wrapStringToHtmlComment (JSON.stringify (webhookHandler.getIssueMeta))
+  },
+*/
+  getIssueBody: (targetService, issue: Issue) => {
+    const issueIsMirrorComment = webhookHandler.wrapStringToHtmlComment (issueIsMirrorString)
+
+    if (targetService === "github")
+      return `${issue.body}\n\n${issueIsMirrorComment}`
+
+    if (targetService === "youtrack")
+      return `${issue.body}{html}${issueIsMirrorComment}{html}`
+  },
+
   createNewIssue: async (originService: string, issue: Issue) => {
-    const hiddenDataJSON = {
-      id: issue.id,
-      // created time,
-      // last modified time,
-      // author,
-      // project,
-      // origin,
-    }
-    const hiddenData = `<!--jsoninfo=${JSON.stringify(hiddenDataJSON)}-->`
-
-    const issueBody = `${issue.body}\n\n${hiddenData}`
-
     if (originService === "youtrack") {
+      const targetService = "github"
+
       return await integrationRest({
-        service: "github",
+        service: targetService,
         method: "post",
         url: `repos/${config.github.user}/${config.github.repo}/issues`,
         data: {
           title: issue.title,
-          body: issueBody,
+          body: webhookHandler.getIssueBody (targetService, issue),
         },
       })
       .catch ((err) => console.log ({err}))
@@ -97,15 +114,17 @@ export const webhookHandler = {
     }
 
     if (originService === "github") {
+      const targetService = "youtrack"
+
       return await integrationRest ({
-        service: "youtrack",
+        service: targetService,
         method: "put",
         url: "issue",
         query: {
           // todo: move to issue.project
           project: "GI",
           summary: issue.title,
-          description: `{html}${issueBody}{html}`,
+          description: webhookHandler.getIssueBody (targetService, issue),
         },
       })
       .catch ((err) => console.log ({err}))
