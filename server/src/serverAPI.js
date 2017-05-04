@@ -69,6 +69,10 @@ export const webhookHandler = {
       }
     }
     else if (rb.action === "edited") {
+      // skip if mirror is edited
+      if (issue.body.indexOf (mirrorMetaVarName) !== -1)
+        return
+
       const updateIssueResponse = await webhookHandler.updateIssue (service, issue)
       console.log ({updateIssueResponse})
     }
@@ -142,14 +146,19 @@ export const webhookHandler = {
   },
 
   updateIssue: async (originService: string, issue: Issue) => {
+
     if (originService === "youtrack") {
       const targetService = "github"
-      throw "not implemented"
+
+      // todo: check if exists before accessing over index
+      const mirrorId = tempStore.issueMappings.filter (
+        (f) => f[originService] === issue.id
+      )[0][targetService]
 
       return await integrationRest({
         service: targetService,
-        method: "post",
-        url: `repos/${config.github.user}/${config.github.repo}/issues`,
+        method: "patch",
+        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}`,
         data: {
           title: issue.title,
           body: webhookHandler.getIssueBody (originService, targetService, issue),

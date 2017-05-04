@@ -11,7 +11,7 @@ export default async (opts) => {
   const query: Object = opts.query || {}
   const data: Object = opts.data || {}
 
-  throwIfValueNotAllowed (method, ["get", "put", "post"])
+  throwIfValueNotAllowed (method, ["get", "put", "post", "patch"])
   throwIfValueNotAllowed (service, ["youtrack", "github"])
 
   const baseUrl = service === "github" ? config.github.url : config.youtrack.url
