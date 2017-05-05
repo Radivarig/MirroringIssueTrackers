@@ -13,6 +13,7 @@ const tempStore = {
   // projectMappings: ..
   // issueMappings: [{"github": "44","youtrack": "GI-71"}],
   issueMappings: [],
+  commentMappings: [],
 }
 // known: {serviceName: stringId}, {newService: stringId}
 const addIssueMapping = ({knownService, knownId, newService, newId}) => {
@@ -23,6 +24,24 @@ const addIssueMapping = ({knownService, knownId, newService, newId}) => {
   }
   else {
     for (const mapping of tempStore.issueMappings) { // iterate array
+      for (const service in mapping) { // iterate keys
+        // if known service ids match
+        if (service === knownService && mapping[service] === knownId)
+          // horrible mutable adding new service and id
+          mapping[newService] = newId
+      }
+    }
+  }
+}
+
+const addCommentMapping = ({knownService, knownId, newService, newId}) => {
+  if (knownService === undefined) {
+    const mapping = {}
+    mapping[newService] = newId
+    tempStore.commentMappings.push (mapping)
+  }
+  else {
+    for (const mapping of tempStore.commentMappings) { // iterate array
       for (const service in mapping) { // iterate keys
         // if known service ids match
         if (service === knownService && mapping[service] === knownId)
@@ -46,7 +65,7 @@ export const webhookHandler = {
     .then ((r) => r.body)
     .catch ((err) => console.log ({err_status: err.status, err}))
     */
-    res.send ("doing stuff")
+    res.send (JSON.stringify(tempStore, null, "\t"))
   },
 
   handleRequest: async (service, req, res) => {
@@ -65,7 +84,7 @@ export const webhookHandler = {
     if (rb.action === "opened") {
       // if this is the mirrored issue
       if (issue.body.indexOf (mirrorMetaVarName) !== -1) {
-        const issueMeta = webhookHandler.getIssueMetaFromBody (issue.body)
+        const issueMeta = webhookHandler.getMetaFromBody (issue.body)
 
         addIssueMapping ({
           knownService: issueMeta.service,
@@ -94,10 +113,24 @@ export const webhookHandler = {
     else if (rb.action === "created") {
       const comment = await webhookHandler.getComment (service, rb)
 
-      const mirrorCommentResponse = await webhookHandler.mirrorComment (service, issue, comment)
-      console.log ({mirrorCommentResponse})
-    }
+      // if this is the mirrored comment
+      if (comment.body.indexOf (mirrorMetaVarName) !== -1) {
+        const commentMeta = webhookHandler.getMetaFromBody (comment.body)
 
+        addIssueMapping ({
+          knownService: commentMeta.service,
+          knownId: commentMeta.id,
+          newService: service,
+          newId: comment.id,
+        })
+      }
+      else {
+        addCommentMapping ({newService: service, newId: comment.id})
+
+        const mirrorCommentResponse = await webhookHandler.mirrorComment (service, issue, comment)
+        console.log ({mirrorCommentResponse})
+      }
+    }
   },
 
   getComment: async (service: string, reqBody: Object): IssueComment => {
@@ -163,7 +196,7 @@ export const webhookHandler = {
 
   wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
 
-  getIssueMetaFromBody: (issueBody): Object | void => {
+  getMetaFromBody: (issueBody): Object | void => {
     const varStart = `<!--${mirrorMetaVarName}=`
     const varEnd = "-->"
     const regexStr = `${varStart}(.*)${varEnd}`
@@ -210,7 +243,6 @@ export const webhookHandler = {
     if (originService === "youtrack") {
       const targetService = "github"
 
-      // todo: check if exists before accessing over index
       const mirrorId = tempStore.issueMappings.filter (
         (f) => f[originService] === issue.id
       )[0][targetService]
@@ -231,7 +263,6 @@ export const webhookHandler = {
     if (originService === "github") {
       const targetService = "youtrack"
 
-      // todo: check if exists before accessing over index
       const mirrorId = tempStore.issueMappings.filter (
         (f) => f[originService] === issue.id
       )[0][targetService]
@@ -254,9 +285,11 @@ export const webhookHandler = {
 
   mirrorComment: async (originService: string, issue: Issue, comment: IssueComment) => {
     if (originService === "youtrack") {
-      throw "not implemented"
-
       const targetService = "github"
+
+      const mirrorId = tempStore.issueMappings.filter (
+        (f) => f[originService] === issue.id
+      )[0][targetService]
 
       return await integrationRest({
         service: targetService,
@@ -268,7 +301,6 @@ export const webhookHandler = {
     if (originService === "github") {
       const targetService = "youtrack"
 
-      // todo: check if exists before accessing over index
       const mirrorId = tempStore.issueMappings.filter (
         (f) => f[originService] === issue.id
       )[0][targetService]
