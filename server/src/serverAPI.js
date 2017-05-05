@@ -172,26 +172,41 @@ export const webhookHandler = {
       return JSON.parse(regexRE[1])
   },
 
-  getIssueBody: (originService, targetService, issue: Issue) => {
+  getMirrorCommentSignature: (originService, targetService, issue: Issue, comment: IssueComment) => {
+    const commentMetaData = {
+      id: comment.id,
+      //project: issue.project,
+      service: originService,
+    }
+
+    const commentHtmlComment = webhookHandler.wrapStringToHtmlComment (
+      `${mirrorMetaVarName}=${JSON.stringify (commentMetaData)}`)
+
+    if (targetService === "github")
+      return commentHtmlComment
+
+    if (targetService === "youtrack")
+      return `{html}${commentHtmlComment}{html}`
+  },
+
+  getMirrorSignature: (originService, targetService, issue: Issue) => {
     const issueMetaData = {
       id: issue.id,
-      project: issue.project,
+      // project: issue.project,
       service: originService,
     }
 
     const issueHtmlComment = webhookHandler.wrapStringToHtmlComment (
-      `${mirrorMetaVarName}=${JSON.stringify (issueMetaData)}`
-    )
+      `${mirrorMetaVarName}=${JSON.stringify (issueMetaData)}`)
 
     if (targetService === "github")
-      return `${issue.body}\n\n${issueHtmlComment}`
+      return issueHtmlComment
 
     if (targetService === "youtrack")
-      return `${issue.body}\n\n{html}${issueHtmlComment}{html}`
+      return `{html}${issueHtmlComment}{html}`
   },
 
   updateMirror: async (originService: string, issue: Issue) => {
-
     if (originService === "youtrack") {
       const targetService = "github"
 
@@ -206,7 +221,7 @@ export const webhookHandler = {
         url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}`,
         data: {
           title: issue.title,
-          body: webhookHandler.getIssueBody (originService, targetService, issue),
+          body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
         },
       })
       .catch ((err) => console.log ({err}))
@@ -229,7 +244,7 @@ export const webhookHandler = {
           // todo: move to issue.project
           project: "GI",
           summary: issue.title,
-          description: webhookHandler.getIssueBody (originService, targetService, issue),
+          description: webhookHandler.getMirrorSignature (originService, targetService, issue),
         },
       })
       .catch ((err) => console.log ({err}))
@@ -258,13 +273,14 @@ export const webhookHandler = {
         (f) => f[originService] === issue.id
       )[0][targetService]
 
+      const commentSignature: string = webhookHandler.getMirrorCommentSignature (originService, targetService, issue, comment)
       return await integrationRest ({
         service: targetService,
         method: "post",
         url: `issue/${mirrorId}/execute`,
         query: {
           // todo: append mirror signature
-          comment: comment.body,
+          comment: `${comment.body}\n\n${commentSignature}`,
         },
       })
       .catch ((err) => console.log ({err}))
@@ -276,13 +292,14 @@ export const webhookHandler = {
     if (originService === "youtrack") {
       const targetService = "github"
 
+      const signature: string = webhookHandler.getMirrorSignature (originService, targetService, issue)
       return await integrationRest({
         service: targetService,
         method: "post",
         url: `repos/${config.github.user}/${config.github.repo}/issues`,
         data: {
           title: issue.title,
-          body: webhookHandler.getIssueBody (originService, targetService, issue),
+          body: `${issue.body}\n\n${signature}`,
         },
       })
       .catch ((err) => console.log ({err}))
@@ -292,6 +309,7 @@ export const webhookHandler = {
     if (originService === "github") {
       const targetService = "youtrack"
 
+      const signature: string = webhookHandler.getMirrorSignature (originService, targetService, issue)
       return await integrationRest ({
         service: targetService,
         method: "put",
@@ -300,7 +318,7 @@ export const webhookHandler = {
           // todo: move to issue.project
           project: "GI",
           summary: issue.title,
-          description: webhookHandler.getIssueBody (originService, targetService, issue),
+          description: `${issue.body}\n\n${signature}`,
         },
       })
       .catch ((err) => console.log ({err}))
