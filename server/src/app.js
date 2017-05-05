@@ -24,5 +24,6 @@ app.enable('trust proxy')
 
 app.post('/github_webhook', webhookHandler.handleRequest.bind (null, "github"))
 app.post('/youtrack_webhook', webhookHandler.handleRequest.bind (null, "youtrack"))
+app.get('/do_stuff', webhookHandler.doStuff)
 
 module.exports = app

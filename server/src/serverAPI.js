@@ -35,6 +35,19 @@ const addIssueMapping = ({knownService, knownId, newService, newId}) => {
 const mirrorMetaVarName = "MIRROR_META"
 
 export const webhookHandler = {
+  doStuff: async (req, res) => {
+    /*
+    const response = await integrationRest ({
+      service: "github",
+      method: "get",
+      url: `issue/`,
+    })
+    .then ((r) => r.body)
+    .catch ((err) => console.log ({err_status: err.status, err}))
+    */
+    res.send ("doing stuff")
+  },
+
   handleRequest: async (service, req, res) => {
     // respond so that youtrack doesn't hang (todo, solve in workflow)
     res.send ()
