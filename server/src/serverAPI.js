@@ -1,5 +1,6 @@
 import type {
   Issue,
+  IssueComment,
 } from './types'
 
 import integrationRest from "./integrationRest"
@@ -10,7 +11,7 @@ import {throwIfValueNotAllowed} from './helpers'
 const tempStore = {
   // {serviceName: stringId, serviceName2: stringId}
   // projectMappings: ..
-  // issueMappings: [{"github": "37","youtrack": "GI-62"}],
+  // issueMappings: [{"github": "44","youtrack": "GI-71"}],
   issueMappings: [],
 }
 // known: {serviceName: stringId}, {newService: stringId}
@@ -90,6 +91,37 @@ export const webhookHandler = {
       console.log ({updateMirrorResponse})
     }
 
+    else if (rb.action === "created") {
+      const comment = await webhookHandler.getComment (service, rb)
+
+      const mirrorCommentResponse = await webhookHandler.mirrorComment (service, issue, comment)
+      console.log ({mirrorCommentResponse})
+    }
+
+  },
+
+  getComment: async (service: string, reqBody: Object): IssueComment => {
+    let rawComment
+
+    if (service === "youtrack") {
+
+    }
+    else if (service === "github") {
+      // todo: also reqwuest comment by id
+      rawComment = reqBody.comment
+    }
+
+    return webhookHandler.getFormatedComment (service, rawComment)
+  },
+
+  getFormatedComment: (service: string, rawComment: Object) => {
+
+    if (service === "github") {
+      return {
+        id: rawComment.id.toString(),
+        body: rawComment.body,
+      }
+    }
   },
 
   getIssue: async (service: string, reqBody: Object): Issue => {
@@ -198,6 +230,41 @@ export const webhookHandler = {
           project: "GI",
           summary: issue.title,
           description: webhookHandler.getIssueBody (originService, targetService, issue),
+        },
+      })
+      .catch ((err) => console.log ({err}))
+      .then ((response) => response.body)
+    }
+  },
+
+  mirrorComment: async (originService: string, issue: Issue, comment: IssueComment) => {
+    if (originService === "youtrack") {
+      throw "not implemented"
+
+      const targetService = "github"
+
+      return await integrationRest({
+        service: targetService,
+      })
+      .catch ((err) => console.log ({err}))
+      .then ((response) => response.body)
+    }
+
+    if (originService === "github") {
+      const targetService = "youtrack"
+
+      // todo: check if exists before accessing over index
+      const mirrorId = tempStore.issueMappings.filter (
+        (f) => f[originService] === issue.id
+      )[0][targetService]
+
+      return await integrationRest ({
+        service: targetService,
+        method: "post",
+        url: `issue/${mirrorId}/execute`,
+        query: {
+          // todo: append mirror signature
+          comment: comment.body,
         },
       })
       .catch ((err) => console.log ({err}))
