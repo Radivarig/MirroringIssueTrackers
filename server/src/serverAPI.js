@@ -77,8 +77,8 @@ export const webhookHandler = {
         addIssueMapping ({newService: service, newId: issue.id})
 
         // create mirror
-        const createNewIssueResponse = await webhookHandler.createNewIssue (service, issue)
-        console.log ({createNewIssueResponse})
+        const createMirrorResponse = await webhookHandler.createMirror (service, issue)
+        console.log ({createMirrorResponse})
       }
     }
     else if (rb.action === "edited") {
@@ -86,8 +86,8 @@ export const webhookHandler = {
       if (issue.body.indexOf (mirrorMetaVarName) !== -1)
         return
 
-      const updateIssueResponse = await webhookHandler.updateIssue (service, issue)
-      console.log ({updateIssueResponse})
+      const updateMirrorResponse = await webhookHandler.updateMirror (service, issue)
+      console.log ({updateMirrorResponse})
     }
 
   },
@@ -158,7 +158,7 @@ export const webhookHandler = {
       return `${issue.body}\n\n{html}${issueHtmlComment}{html}`
   },
 
-  updateIssue: async (originService: string, issue: Issue) => {
+  updateMirror: async (originService: string, issue: Issue) => {
 
     if (originService === "youtrack") {
       const targetService = "github"
@@ -205,7 +205,7 @@ export const webhookHandler = {
     }
   },
 
-  createNewIssue: async (originService: string, issue: Issue) => {
+  createMirror: async (originService: string, issue: Issue) => {
     if (originService === "youtrack") {
       const targetService = "github"
 
