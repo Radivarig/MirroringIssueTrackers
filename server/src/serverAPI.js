@@ -136,9 +136,19 @@ export const webhookHandler = {
   getComment: async (service: string, reqBody: Object): IssueComment => {
     let rawComment
 
+    console.log (service, reqBody.commentId)
     if (service === "youtrack") {
+      const comments = await integrationRest ({
+        service: "youtrack",
+        method: "get",
+        url: `issue/${reqBody.id}/comment`,
+      })
+      .catch ((err) => console.log ({err}))
+      .then ((response) => response.body)
 
+      rawComment = comments.filter ((f) => f.id === reqBody.commentId)[0]
     }
+
     else if (service === "github") {
       // todo: also reqwuest comment by id
       rawComment = reqBody.comment
@@ -148,6 +158,12 @@ export const webhookHandler = {
   },
 
   getFormatedComment: (service: string, rawComment: Object) => {
+    if (service === "youtrack") {
+      return {
+        id: rawComment.id.toString(),
+        body: rawComment.text,
+      }
+    }
 
     if (service === "github") {
       return {
@@ -291,8 +307,16 @@ export const webhookHandler = {
         (f) => f[originService] === issue.id
       )[0][targetService]
 
+      const commentSignature: string = webhookHandler.getMirrorCommentSignature (originService, targetService, issue, comment)
+
+      // POST /repos/:owner/:repo/issues/:number/comments
       return await integrationRest({
         service: targetService,
+        method: "post",
+        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}/comments`,
+        data: {
+          body: `${comment.body}\n\n${commentSignature}`,
+        },
       })
       .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
