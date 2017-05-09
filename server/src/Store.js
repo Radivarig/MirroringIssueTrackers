@@ -15,12 +15,11 @@ export class Mapping {
     const {knownValue} = opts
 
     const match = this.mappings.filter ((f) => f[knownKey] === knownValue)[0]
-    console.log (key, knownKey, knownValue, match, this.mappings[0])
     return match && match[key]
   }
 
   add (opts) {
-    const knownKey: string = opts.knownKey
+    const knownKey: string | void = opts.knownKey
     const newKey: string = opts.newKey
     const {knownValue, newValue} = opts
 
