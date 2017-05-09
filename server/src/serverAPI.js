@@ -34,8 +34,7 @@ export const webhookHandler = {
     throwIfValueNotAllowed (service, ["github", "youtrack"])
 
     const rb = req.body
-    console.log (`Webhook from "${service}"`)
-
+    console.log (`Webhook from "${service}"`, rb.issue)
     const issue: Issue = await webhookHandler.getIssue (service, rb)
 
     console.log ({action: rb.action, issue, comment: rb.comment})
@@ -212,24 +211,33 @@ export const webhookHandler = {
     }
   },
 
-  getIssue: async (service: string, reqBody: Object): Issue => {
+  getIssue: async (originService: string, reqBody: Object): Issue => {
     let rawIssue
 
-    if (service === "youtrack") {
+    if (originService === "youtrack") {
+      const issueId = reqBody.id
       rawIssue = await integrationRest ({
-        service: "youtrack",
+        service: originService,
         method: "get",
-        url: `issue/${reqBody.id}`,
+        url: `issue/${issueId}`,
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({err}))
     }
-    // todo: also request issue by id to get full info
-    else if (service === "github") {
-      rawIssue = reqBody.issue
+    else if (originService === "github") {
+      const issueId = reqBody.issue.number
+      rawIssue = await integrationRest ({
+        service: originService,
+        method: "get",
+        url: `repos/${config.github.user}/${config.github.repo}/issues/${issueId}`,
+      })
+      .then ((response) => response.body)
+      .catch ((err) => console.log ({err}))
     }
+    // race between github and request..
+    rawIssue = rawIssue || reqBody.issue
 
-    return webhookHandler.getFormatedIssue (service, rawIssue)
+    return webhookHandler.getFormatedIssue (originService, rawIssue)
   },
 
   getFormatedIssue: (service: string, rawIssue: Object): Issue => {
