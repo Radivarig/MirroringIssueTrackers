@@ -1,6 +1,6 @@
 import mobx, {observable, computed} from 'mobx'
 
-class Mapping {
+export class Mapping {
   constructor () {
     // mobx.autorun(() => console.log(this.report))
   }
@@ -9,12 +9,21 @@ class Mapping {
 
   @observable mappings = []
 
-  getValueByKeyAndKnownKeyValue ({key, knownKey, knownValue}) {
+  getValueByKeyAndKnownKeyValue (opts) {
+    const key: string = opts.key
+    const knownKey: string = opts.knownKey
+    const {knownValue} = opts
+
     const match = this.mappings.filter ((f) => f[knownKey] === knownValue)[0]
+    console.log (key, knownKey, knownValue, match, this.mappings[0])
     return match && match[key]
   }
 
-  add ({knownKey, knownValue, newKey, newValue}) {
+  add (opts) {
+    const knownKey: string = opts.knownKey
+    const newKey: string = opts.newKey
+    const {knownValue, newValue} = opts
+
     // adding first time
     if (knownKey === undefined) {
       const mapping = {}
@@ -28,7 +37,7 @@ class Mapping {
         // iterate keys
         for (const key in mapping) {
           // if known key-value match
-          if (key === knownKey && mapping[key] === knownValue)
+          if (key === knownKey && mapping[knownKey] === knownValue)
             mapping[newKey] = newValue
         }
       }
