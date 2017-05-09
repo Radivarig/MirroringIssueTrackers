@@ -4,6 +4,7 @@ const chaiHttp = require('chai-http')
 chai.use(chaiHttp)
 const app = require('../src/app.js')
 
+/*
 describe('test example', () => {
   it('POST /ajax_post should return 200', (done) => {
     chai.request(app.listen())
@@ -14,3 +15,4 @@ describe('test example', () => {
     })
   })
 })
+*/
