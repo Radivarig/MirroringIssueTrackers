@@ -112,7 +112,6 @@ export const webhookHandler = {
   updateMirrorComment: async (originService, issue: Issue, comment: IssueComment) => {
     if (originService === "youtrack") {
       const targetService = "github"
-      throw "not implemented"
 
       const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
         key: targetService,
@@ -120,13 +119,20 @@ export const webhookHandler = {
         knownValue: issue.id,
       })
 
+      const mirrorCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: comment.id,
+      })
+
+      const commentSignature = webhookHandler.getMirrorCommentSignature (originService, targetService, issue, comment)
+
       return await integrationRest({
         service: targetService,
         method: "patch",
-        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}`,
+        url: `repos/${config.github.user}/${config.github.repo}/issues/comments/${mirrorCommentId}`,
         data: {
-          title: issue.title,
-          body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
+          body: `${comment.body}\n\n${commentSignature}`,
         },
       })
       .catch ((err) => console.log ({err}))
@@ -141,8 +147,6 @@ export const webhookHandler = {
         knownKey: originService,
         knownValue: issue.id,
       })
-
-      // PUT /rest/issue/{issue_id}/comment/{comment_id} {"text": "updated comment text"}
 
       const mirrorCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
         key: targetService,
