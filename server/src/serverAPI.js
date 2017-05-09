@@ -342,7 +342,7 @@ export const webhookHandler = {
           // todo: move to issue.project
           project: "GI",
           summary: issue.title,
-          description: webhookHandler.getMirrorSignature (originService, targetService, issue),
+          description: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
         },
       })
       .catch ((err) => console.log ({err}))
