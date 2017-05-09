@@ -34,10 +34,10 @@ export const webhookHandler = {
     throwIfValueNotAllowed (service, ["github", "youtrack"])
 
     const rb = req.body
-    console.log (`Webhook from "${service}"`, rb.issue)
+    console.log (`Webhook from "${service}"`)
     const issue: Issue = await webhookHandler.getIssue (service, rb)
 
-    console.log ({action: rb.action, issue, comment: rb.comment})
+    console.log ({action: rb.action, "issue.id": issue.id, hasComment: rb.comment !== undefined})
 
     if (rb.action === "opened") {
       // if this is the mirrored issue
@@ -58,7 +58,6 @@ export const webhookHandler = {
 
         // create mirror issue
         const createMirrorResponse = await webhookHandler.createMirror (service, issue)
-        console.log ({createMirrorResponse})
       }
     }
     else if (rb.action === "edited") {
@@ -70,7 +69,6 @@ export const webhookHandler = {
           return
 
         const r = await webhookHandler.updateMirrorComment (service, issue, comment)
-        console.log ({updateMirrorCommentResponse: r})
       }
       // issue
       else {
@@ -79,7 +77,6 @@ export const webhookHandler = {
           return
 
         const r = await webhookHandler.updateMirror (service, issue)
-        console.log ({updateMirrorResponse: r})
       }
     }
 
@@ -103,7 +100,6 @@ export const webhookHandler = {
         store.commentMappings.add ({newKey: service, newValue: comment.id})
 
         const r = await webhookHandler.createMirrorComment (service, issue, comment)
-        console.log ({createMirrorCommentResponse: r})
       }
     }
   },
@@ -134,8 +130,8 @@ export const webhookHandler = {
           body: `${comment.body}\n\n${commentSignature}`,
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
     }
 
     if (originService === "github") {
@@ -163,8 +159,8 @@ export const webhookHandler = {
           text: `${comment.body}\n\n${commentSignature}`,
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
     }
   },
 
@@ -175,11 +171,10 @@ export const webhookHandler = {
       const comments = await integrationRest ({
         service: originService,
         method: "get",
-        url: `issue/${reqBody.id}/comment`,
+        url: `issue/${reqBody.id}/comment/`,
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
-
+      .catch ((err) => console.log ({status: err.status}))
       rawComment = comments.filter ((f) => f.id === reqBody.commentId)[0]
     }
 
@@ -190,6 +185,7 @@ export const webhookHandler = {
         url: `repos/${config.github.user}/${config.github.repo}/issues/comments/${reqBody.comment.id}`,
       })
       .then ((response) => response.body)
+
     }
 
     return webhookHandler.getFormatedComment (originService, rawComment)
@@ -222,7 +218,7 @@ export const webhookHandler = {
         url: `issue/${issueId}`,
       })
       .then ((response) => response.body)
-      .catch ((err) => console.log ({err}))
+      .catch ((err) => console.log ({status: err.status}))
     }
     else if (originService === "github") {
       const issueId = reqBody.issue.number
@@ -232,7 +228,7 @@ export const webhookHandler = {
         url: `repos/${config.github.user}/${config.github.repo}/issues/${issueId}`,
       })
       .then ((response) => response.body)
-      .catch ((err) => console.log ({err}))
+      .catch ((err) => console.log ({status: err.status}))
     }
     // race between github and request..
     rawIssue = rawIssue || reqBody.issue
@@ -321,8 +317,8 @@ export const webhookHandler = {
           body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
     }
 
     if (originService === "github") {
@@ -345,8 +341,8 @@ export const webhookHandler = {
           description: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
     }
   },
 
@@ -362,7 +358,6 @@ export const webhookHandler = {
 
       const commentSignature: string = webhookHandler.getMirrorCommentSignature (originService, targetService, issue, comment)
 
-      // POST /repos/:owner/:repo/issues/:number/comments
       return await integrationRest({
         service: targetService,
         method: "post",
@@ -371,8 +366,8 @@ export const webhookHandler = {
           body: `${comment.body}\n\n${commentSignature}`,
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
     }
 
     if (originService === "github") {
@@ -394,8 +389,8 @@ export const webhookHandler = {
           comment: `${comment.body}\n\n${commentSignature}`,
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
     }
   },
 
@@ -413,8 +408,8 @@ export const webhookHandler = {
           body: `${issue.body}\n\n${signature}`,
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
     }
 
     if (originService === "github") {
@@ -432,8 +427,8 @@ export const webhookHandler = {
           description: `${issue.body}\n\n${signature}`,
         },
       })
-      .catch ((err) => console.log ({err}))
       .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
 
     }
   },
