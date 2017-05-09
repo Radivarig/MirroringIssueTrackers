@@ -67,8 +67,8 @@ export const webhookHandler = {
       if (issue.body.indexOf (mirrorMetaVarName) !== -1)
         return
 
-      const updateMirrorResponse = await webhookHandler.updateMirror (service, issue)
-      console.log ({updateMirrorResponse})
+      const r = await webhookHandler.updateMirror (service, issue)
+      console.log ({updateMirrorResponse: r})
     }
 
     else if (rb.action === "created") {
@@ -90,8 +90,8 @@ export const webhookHandler = {
         // expand mapping with mirror comment
         store.commentMappings.add ({newKey: service, newValue: comment.id})
 
-        const mirrorCommentResponse = await webhookHandler.mirrorComment (service, issue, comment)
-        console.log ({mirrorCommentResponse})
+        const r = await webhookHandler.createMirrorComment (service, issue, comment)
+        console.log ({createMirrorCommentResponse: r})
       }
     }
   },
@@ -266,7 +266,7 @@ export const webhookHandler = {
     }
   },
 
-  mirrorComment: async (originService: string, issue: Issue, comment: IssueComment) => {
+  createMirrorComment: async (originService: string, issue: Issue, comment: IssueComment) => {
     if (originService === "youtrack") {
       const targetService = "github"
 
