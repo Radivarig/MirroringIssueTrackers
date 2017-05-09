@@ -38,7 +38,7 @@ export const webhookHandler = {
 
     const issue: Issue = await webhookHandler.getIssue (service, rb)
 
-    console.log ({action: rb.action, issue})
+    console.log ({action: rb.action, issue, comment: rb.comment})
 
     if (rb.action === "opened") {
       // if this is the mirrored issue
@@ -63,16 +63,29 @@ export const webhookHandler = {
       }
     }
     else if (rb.action === "edited") {
-      // skip if mirror issue is edited
-      if (issue.body.indexOf (mirrorMetaVarName) !== -1)
-        return
+      if (rb.comment) {
+        const comment: IssueComment = await webhookHandler.getComment (service, rb)
 
-      const r = await webhookHandler.updateMirror (service, issue)
-      console.log ({updateMirrorResponse: r})
+        // skip if mirror issue is edited
+        if (comment.body.indexOf (mirrorMetaVarName) !== -1)
+          return
+
+        const r = await webhookHandler.updateMirrorComment (service, issue, comment)
+        console.log ({updateMirrorCommentResponse: r})
+      }
+      // issue
+      else {
+        // skip if mirror issue is edited
+        if (issue.body.indexOf (mirrorMetaVarName) !== -1)
+          return
+
+        const r = await webhookHandler.updateMirror (service, issue)
+        console.log ({updateMirrorResponse: r})
+      }
     }
 
     else if (rb.action === "created") {
-      const comment = await webhookHandler.getComment (service, rb)
+      const comment: IssueComment = await webhookHandler.getComment (service, rb)
 
       // if this is the mirrored comment
       if (comment.body.indexOf (mirrorMetaVarName) !== -1) {
@@ -96,13 +109,68 @@ export const webhookHandler = {
     }
   },
 
-  getComment: async (service: string, reqBody: Object): IssueComment => {
+  updateMirrorComment: async (originService, issue: Issue, comment: IssueComment) => {
+    if (originService === "youtrack") {
+      const targetService = "github"
+      throw "not implemented"
+
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: issue.id,
+      })
+
+      return await integrationRest({
+        service: targetService,
+        method: "patch",
+        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}`,
+        data: {
+          title: issue.title,
+          body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
+        },
+      })
+      .catch ((err) => console.log ({err}))
+      .then ((response) => response.body)
+    }
+
+    if (originService === "github") {
+      const targetService = "youtrack"
+
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: issue.id,
+      })
+
+      // PUT /rest/issue/{issue_id}/comment/{comment_id} {"text": "updated comment text"}
+
+      const mirrorCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: comment.id,
+      })
+
+      const commentSignature = webhookHandler.getMirrorCommentSignature (originService, targetService, issue, comment)
+
+      return await integrationRest ({
+        service: targetService,
+        method: "put",
+        url: `issue/${mirrorId}/comment/${mirrorCommentId}`,
+        data: {
+          text: `${comment.body}\n\n${commentSignature}`,
+        },
+      })
+      .catch ((err) => console.log ({err}))
+      .then ((response) => response.body)
+    }
+  },
+
+  getComment: async (originService: string, reqBody: Object): IssueComment => {
     let rawComment
 
-    console.log (service, reqBody.commentId)
-    if (service === "youtrack") {
+    if (originService === "youtrack") {
       const comments = await integrationRest ({
-        service: "youtrack",
+        service: originService,
         method: "get",
         url: `issue/${reqBody.id}/comment`,
       })
@@ -112,12 +180,16 @@ export const webhookHandler = {
       rawComment = comments.filter ((f) => f.id === reqBody.commentId)[0]
     }
 
-    else if (service === "github") {
-      // todo: also reqwuest comment by id
-      rawComment = reqBody.comment
+    else if (originService === "github") {
+      rawComment = await integrationRest ({
+        service: originService,
+        method: "get",
+        url: `repos/${config.github.user}/${config.github.repo}/issues/comments/${reqBody.comment.id}`,
+      })
+      .then ((response) => response.body)
     }
 
-    return webhookHandler.getFormatedComment (service, rawComment)
+    return webhookHandler.getFormatedComment (originService, rawComment)
   },
 
   getFormatedComment: (service: string, rawComment: Object) => {
