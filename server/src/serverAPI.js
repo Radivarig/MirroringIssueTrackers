@@ -8,49 +8,8 @@ import config from "../config/integration.config"
 
 import {throwIfValueNotAllowed} from './helpers'
 
-const tempStore = {
-  // {serviceName: stringId, serviceName2: stringId}
-  // projectMappings: ..
-  // issueMappings: [{"github": "44","youtrack": "GI-71"}],
-  issueMappings: [],
-  commentMappings: [],
-}
-// known: {serviceName: stringId}, {newService: stringId}
-const addIssueMapping = ({knownService, knownId, newService, newId}) => {
-  if (knownService === undefined) {
-    const mapping = {}
-    mapping[newService] = newId
-    tempStore.issueMappings.push (mapping)
-  }
-  else {
-    for (const mapping of tempStore.issueMappings) { // iterate array
-      for (const service in mapping) { // iterate keys
-        // if known service ids match
-        if (service === knownService && mapping[service] === knownId)
-          // horrible mutable adding new service and id
-          mapping[newService] = newId
-      }
-    }
-  }
-}
-
-const addCommentMapping = ({knownService, knownId, newService, newId}) => {
-  if (knownService === undefined) {
-    const mapping = {}
-    mapping[newService] = newId
-    tempStore.commentMappings.push (mapping)
-  }
-  else {
-    for (const mapping of tempStore.commentMappings) { // iterate array
-      for (const service in mapping) { // iterate keys
-        // if known service ids match
-        if (service === knownService && mapping[service] === knownId)
-          // horrible mutable adding new service and id
-          mapping[newService] = newId
-      }
-    }
-  }
-}
+import Store from './Store'
+const store = new Store ()
 
 const mirrorMetaVarName = "MIRROR_META"
 
@@ -65,7 +24,7 @@ export const webhookHandler = {
     .then ((r) => r.body)
     .catch ((err) => console.log ({err_status: err.status, err}))
     */
-    res.send (JSON.stringify(tempStore, null, "\t"))
+    res.send (`<pre>${JSON.stringify(store, null, "    ")}</pre>`)
   },
 
   handleRequest: async (service, req, res) => {
@@ -86,23 +45,25 @@ export const webhookHandler = {
       if (issue.body.indexOf (mirrorMetaVarName) !== -1) {
         const issueMeta = webhookHandler.getMetaFromBody (issue.body)
 
-        addIssueMapping ({
-          knownService: issueMeta.service,
-          knownId: issueMeta.id,
-          newService: service,
-          newId: issue.id,
+        // create mapping with original issue
+        store.issueMappings.add ({
+          knownKey: issueMeta.service,
+          knownValue: issueMeta.id,
+          newKey: service,
+          newValue: issue.id,
         })
       }
       else {
-        addIssueMapping ({newService: service, newId: issue.id})
+        // expand mapping with mirror issue
+        store.issueMappings.add ({newKey: service, newValue: issue.id})
 
-        // create mirror
+        // create mirror issue
         const createMirrorResponse = await webhookHandler.createMirror (service, issue)
         console.log ({createMirrorResponse})
       }
     }
     else if (rb.action === "edited") {
-      // skip if mirror is edited
+      // skip if mirror issue is edited
       if (issue.body.indexOf (mirrorMetaVarName) !== -1)
         return
 
@@ -117,15 +78,17 @@ export const webhookHandler = {
       if (comment.body.indexOf (mirrorMetaVarName) !== -1) {
         const commentMeta = webhookHandler.getMetaFromBody (comment.body)
 
-        addIssueMapping ({
-          knownService: commentMeta.service,
-          knownId: commentMeta.id,
-          newService: service,
-          newId: comment.id,
+        // create mapping with original comment
+        store.commentMappings.add ({
+          knownKey: commentMeta.service,
+          knownValue: commentMeta.id,
+          newKey: service,
+          newValue: comment.id,
         })
       }
       else {
-        addCommentMapping ({newService: service, newId: comment.id})
+        // expand mapping with mirror comment
+        store.commentMappings.add ({newKey: service, newValue: comment.id})
 
         const mirrorCommentResponse = await webhookHandler.mirrorComment (service, issue, comment)
         console.log ({mirrorCommentResponse})
@@ -259,9 +222,11 @@ export const webhookHandler = {
     if (originService === "youtrack") {
       const targetService = "github"
 
-      const mirrorId = tempStore.issueMappings.filter (
-        (f) => f[originService] === issue.id
-      )[0][targetService]
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: issue.id,
+      })
 
       return await integrationRest({
         service: targetService,
@@ -279,9 +244,11 @@ export const webhookHandler = {
     if (originService === "github") {
       const targetService = "youtrack"
 
-      const mirrorId = tempStore.issueMappings.filter (
-        (f) => f[originService] === issue.id
-      )[0][targetService]
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: issue.id,
+      })
 
       return await integrationRest ({
         service: targetService,
@@ -303,9 +270,11 @@ export const webhookHandler = {
     if (originService === "youtrack") {
       const targetService = "github"
 
-      const mirrorId = tempStore.issueMappings.filter (
-        (f) => f[originService] === issue.id
-      )[0][targetService]
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: issue.id,
+      })
 
       const commentSignature: string = webhookHandler.getMirrorCommentSignature (originService, targetService, issue, comment)
 
@@ -325,9 +294,11 @@ export const webhookHandler = {
     if (originService === "github") {
       const targetService = "youtrack"
 
-      const mirrorId = tempStore.issueMappings.filter (
-        (f) => f[originService] === issue.id
-      )[0][targetService]
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: issue.id,
+      })
 
       const commentSignature: string = webhookHandler.getMirrorCommentSignature (originService, targetService, issue, comment)
       return await integrationRest ({
