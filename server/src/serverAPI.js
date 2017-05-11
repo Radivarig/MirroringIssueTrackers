@@ -102,6 +102,75 @@ export const webhookHandler = {
         const r = await webhookHandler.createMirrorComment (service, issue, comment)
       }
     }
+    else if (rb.action === "deleted") {
+      if (rb.comment) {
+        const r = await webhookHandler.deleteComment(service, rb)
+      }
+      // issue
+      else {
+        // only youtrack can delete, for github:
+          // change title to <deleted>
+          // set body to empty string
+          // close issue
+          // remove all comments
+      }
+    }
+  },
+
+  deleteComment: async (originService, reqBody: Object) => {
+    if (originService === "github") {
+      const targetService = "youtrack"
+      // delete reqBody.comment.id mirror
+    }
+
+    if (originService === "youtrack") {
+      const targetService = "github"
+      // bug in youtrack API, can't provide deleted comment id
+      // get all comments from original, deleted is stored mirror not in that list
+
+      // get youtrack comments
+      const youtrackComments = await integrationRest ({
+        service: originService,
+        method: "get",
+        url: `issue/${reqBody.id}/comment/`,
+      })
+      .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
+
+      const youtrackCommentIds = youtrackComments.map ((m) => m.id.toString ())
+
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: reqBody.id,
+      })
+
+      // get github comments
+      const githubComments = await integrationRest ({
+        service: targetService,
+        method: "get",
+        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}/comments`,
+      })
+      .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
+
+      const githubCommentIds = githubComments.map ((m) => m.id.toString ())
+
+      githubCommentIds.forEach ((githubCommentId) => {
+        const youtrackCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
+          key: originService,
+          knownKey: targetService,
+          knownValue: githubCommentId,
+        })
+
+        if (youtrackCommentIds.indexOf(youtrackCommentId) === -1) {
+          console.log ("delete", {githubCommentId})
+          // delete githubCommentId
+          // remove mapping from store
+        }
+      })
+
+    }
   },
 
   updateMirrorComment: async (originService, issue: Issue, comment: IssueComment) => {
