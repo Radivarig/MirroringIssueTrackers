@@ -104,7 +104,7 @@ export const webhookHandler = {
     }
     else if (rb.action === "deleted") {
       if (rb.comment) {
-        const r = await webhookHandler.deleteComment(service, rb)
+        const r = await webhookHandler.deleteComment (service, rb)
       }
       // issue
       else {
@@ -120,7 +120,45 @@ export const webhookHandler = {
   deleteComment: async (originService, reqBody: Object) => {
     if (originService === "github") {
       const targetService = "youtrack"
-      // delete reqBody.comment.id mirror
+
+      // todo, get these in a more clean way
+      const githubIssueId: string = reqBody.issue.number.toString ()
+      const githubCommentId: string = reqBody.comment.id.toString ()
+
+      console.log ({githubIssueId, githubCommentId})
+
+      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: githubIssueId,
+      })
+
+      const mirrorCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
+        key: targetService,
+        knownKey: originService,
+        knownValue: githubCommentId,
+      })
+
+      const r = await integrationRest ({
+        service: targetService,
+        method: "delete",
+        url: `issue/${mirrorId}/comment/${mirrorCommentId}`,
+        query: {
+          permanently: true,
+        },
+      })
+      .then ((response) => response.body)
+      .catch ((err) => console.log ({status: err.status}))
+
+      store.commentMappings.remove ({
+        knownKey: originService,
+        knownValue: githubCommentId,
+      })
+      store.commentMappings.remove ({
+        knownKey: targetService,
+        knownValue: mirrorCommentId,
+      })
+
     }
 
     if (originService === "youtrack") {
