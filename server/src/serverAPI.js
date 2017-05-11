@@ -230,8 +230,6 @@ export const webhookHandler = {
       .then ((response) => response.body)
       .catch ((err) => console.log ({status: err.status}))
     }
-    // race between github and request..
-    rawIssue = rawIssue || reqBody.issue
 
     return webhookHandler.getFormatedIssue (originService, rawIssue)
   },
