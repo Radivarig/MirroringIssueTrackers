@@ -156,7 +156,7 @@ export const webhookHandler = {
 
       const githubCommentIds = githubComments.map ((m) => m.id.toString ())
 
-      githubCommentIds.forEach ((githubCommentId) => {
+      githubCommentIds.forEach (async (githubCommentId) => {
         const youtrackCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
           key: originService,
           knownKey: targetService,
@@ -164,10 +164,25 @@ export const webhookHandler = {
         })
 
         if (youtrackCommentIds.indexOf(youtrackCommentId) === -1) {
-          console.log ("delete", {githubCommentId})
-          // delete githubCommentId
-          // remove mapping from store
+          const r = await integrationRest ({
+            service: targetService,
+            method: "delete",
+            url: `repos/${config.github.user}/${config.github.repo}/issues/comments/${githubCommentId}`,
+          })
+          .then ((response) => response.body)
+          .catch ((err) => console.log ({status: err.status}))
+
+          store.commentMappings.remove ({
+            knownKey: originService,
+            knownValue: youtrackCommentId,
+          })
+          store.commentMappings.remove ({
+            knownKey: targetService,
+            knownValue: githubCommentId,
+          })
+
         }
+
       })
 
     }

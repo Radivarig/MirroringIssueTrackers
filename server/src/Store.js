@@ -18,6 +18,14 @@ export class Mapping {
     return match && match[key]
   }
 
+  remove (opts) {
+    const knownKey: string = opts.knownKey
+    const {knownValue} = opts
+
+    // remove known mapping
+    this.mappings = this.mappings.filter ((m) => m[knownKey] !== knownValue)
+  }
+
   add (opts) {
     const knownKey: string | void = opts.knownKey
     const newKey: string = opts.newKey
