@@ -12,6 +12,27 @@ import Store from './Store'
 const store = new Store ()
 
 const mirrorMetaVarName = "MIRROR_META"
+const toSkipFieldNamesForLabels = [
+  "summary",
+  "description",
+
+  "projectShortName",
+  "numberInProject",
+
+  "created",
+  "updated",
+
+  "updaterName",
+  "updaterFullName",
+
+  "reporterName",
+  "reporterFullName",
+
+  "commentsCount",
+  "votes",
+
+  "sprint",
+]
 
 export const webhookHandler = {
   doStuff: async (req, res) => {
@@ -365,10 +386,24 @@ export const webhookHandler = {
       }
     }
     if (service === "youtrack") {
+      let title = ""
+      let body = ""
+      const other = []
+
+      rawIssue.field.forEach ((f) => {
+        if (f.name === "summary")
+          title = f.value
+        else if (f.name === "description")
+          body = f.value
+        else if (toSkipFieldNamesForLabels.indexOf (f.name) === -1)
+          other.push (f)
+      })
+
       return {
         id: rawIssue.id,
-        title: rawIssue.field.filter((f) => f.name === "summary")[0].value,
-        body: rawIssue.field.filter((f) => f.name === "description")[0].value,
+        title,
+        body,
+        other,
       }
     }
   },
@@ -519,6 +554,10 @@ export const webhookHandler = {
       const targetService = "github"
 
       const signature: string = webhookHandler.getMirrorSignature (originService, targetService, issue)
+
+      const labels = ["Mirror:Youtrack"].concat (
+        issue.other.map ((o) => `${o.name}:${o.value}`))
+
       return await integrationRest({
         service: targetService,
         method: "post",
@@ -526,7 +565,7 @@ export const webhookHandler = {
         data: {
           title: issue.title,
           body: `${issue.body}\n\n${signature}`,
-          labels: ["Mirror:Youtrack"],
+          labels,
         },
       })
       .then ((response) => response.body)
