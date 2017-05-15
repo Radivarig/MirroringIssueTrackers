@@ -526,6 +526,7 @@ export const webhookHandler = {
         data: {
           title: issue.title,
           body: `${issue.body}\n\n${signature}`,
+          labels: ["Mirror:Youtrack"],
         },
       })
       .then ((response) => response.body)
