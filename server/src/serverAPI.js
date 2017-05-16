@@ -12,26 +12,11 @@ import Store from './Store'
 const store = new Store ()
 
 const mirrorMetaVarName = "MIRROR_META"
-const toSkipFieldNamesForLabels = [
-  "summary",
-  "description",
 
-  "projectShortName",
-  "numberInProject",
-
-  "created",
-  "updated",
-
-  "updaterName",
-  "updaterFullName",
-
-  "reporterName",
-  "reporterFullName",
-
-  "commentsCount",
-  "votes",
-
-  "sprint",
+const fieldsToIncludeAsLabels = [
+  "Priority",
+  "State",
+  "Type",
 ]
 
 export const webhookHandler = {
@@ -395,7 +380,7 @@ export const webhookHandler = {
           title = f.value
         else if (f.name === "description")
           body = f.value
-        else if (toSkipFieldNamesForLabels.indexOf (f.name) === -1)
+        else if (fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
           other.push (f)
       })
 
@@ -463,6 +448,9 @@ export const webhookHandler = {
         knownValue: issue.id,
       })
 
+      const labels = ["Mirror:Youtrack"].concat (
+        issue.other.map ((o) => `${o.name}:${o.value}`))
+
       return await integrationRest({
         service: targetService,
         method: "patch",
@@ -470,6 +458,7 @@ export const webhookHandler = {
         data: {
           title: issue.title,
           body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
+          labels,
         },
       })
       .then ((response) => response.body)
