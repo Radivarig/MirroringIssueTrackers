@@ -362,18 +362,27 @@ export const webhookHandler = {
     return webhookHandler.getFormatedIssue (originService, rawIssue)
   },
 
+  getLabelsFromFields: (fields: Array<{name: string, value: string}>): Array<string> =>
+    fields.map ((field) =>
+      // add here handles for field.specialAttr
+       `${field.name}:${field.value}`),
+
   getFormatedIssue: (service: string, rawIssue: Object): Issue => {
     if (service === "github") {
+      // TODO labels, how to display them on youtrack if origin is github,
+      // should fields be permitted to change from github if origin is youtrack?
+
       return {
         id: rawIssue.number.toString(),
         title: rawIssue.title,
         body: rawIssue.body,
+        labels: [],
       }
     }
     if (service === "youtrack") {
       let title = ""
       let body = ""
-      const other = []
+      const fields = []
 
       rawIssue.field.forEach ((f) => {
         if (f.name === "summary")
@@ -381,14 +390,16 @@ export const webhookHandler = {
         else if (f.name === "description")
           body = f.value
         else if (fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
-          other.push (f)
+          fields.push (f)
       })
+
+      const labels = ["Mirror:Youtrack"].concat (webhookHandler.getLabelsFromFields (fields))
 
       return {
         id: rawIssue.id,
         title,
         body,
-        other,
+        labels,
       }
     }
   },
@@ -448,9 +459,6 @@ export const webhookHandler = {
         knownValue: issue.id,
       })
 
-      const labels = ["Mirror:Youtrack"].concat (
-        issue.other.map ((o) => `${o.name}:${o.value}`))
-
       return await integrationRest({
         service: targetService,
         method: "patch",
@@ -458,7 +466,7 @@ export const webhookHandler = {
         data: {
           title: issue.title,
           body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
-          labels,
+          labels: issue.labels,
         },
       })
       .then ((response) => response.body)
@@ -544,9 +552,6 @@ export const webhookHandler = {
 
       const signature: string = webhookHandler.getMirrorSignature (originService, targetService, issue)
 
-      const labels = ["Mirror:Youtrack"].concat (
-        issue.other.map ((o) => `${o.name}:${o.value}`))
-
       return await integrationRest({
         service: targetService,
         method: "post",
@@ -554,7 +559,7 @@ export const webhookHandler = {
         data: {
           title: issue.title,
           body: `${issue.body}\n\n${signature}`,
-          labels,
+          labels: issue.labels,
         },
       })
       .then ((response) => response.body)
