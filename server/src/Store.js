@@ -64,4 +64,5 @@ export class Mapping {
 export default class Store {
   issueMappings: Mapping = new Mapping ()
   commentMappings: Mapping = new Mapping ()
+  issuesWaitingForMirror: Object = {}
 }

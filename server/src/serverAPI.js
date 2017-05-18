@@ -13,37 +13,77 @@ const store = new Store ()
 
 const mirrorMetaVarName = "MIRROR_META"
 
+// === export to config
 const fieldsToIncludeAsLabels = [
   "Priority",
   "State",
   "Type",
 ]
 
+const services = ["github", "youtrack"]
+// ===
+
 export const webhookHandler = {
   doStuff: async (req, res) => {
-    /*
-    const response = await integrationRest ({
-      service: "github",
-      method: "get",
-      url: `issue/`,
-    })
-    .then ((r) => r.body)
-    .catch ((err) => console.log ({err_status: err.status, err}))
-    */
     res.send (`<pre>${JSON.stringify(store, null, "    ")}</pre>`)
   },
 
+  getIssueIdFromRequestBody: (originService: string, reqBody: Object): string => {
+    if (originService === "youtrack")
+      return reqBody.issueId.toString ()
+    if (originService === "github")
+      return reqBody.issue.number.toString ()
+  },
+
+  getTargetId: (originService: string, originId: string, targetService: string): string | void =>
+    store.issueMappings.getValueByKeyAndKnownKeyValue ({
+      key: targetService,
+      knownKey: originService,
+      knownValue: originId,
+    }),
+
+  doMirror: async (originService: string, originId: string) => {
+    const issue: Issue = await webhookHandler.getIssue (originService, originId)
+
+    services.forEach (async (targetService) => {
+      if (targetService === originService)
+        return
+
+      const targetId: string = webhookHandler.getTargetId (originService, originId, targetService)
+      const targetIssue = await webhookHandler.getIssue (targetService, targetId)
+
+      if (targetIssue === undefined) {
+        // raise flag to listen for new mirrorId of originId to sync
+        store.issuesWaitingForMirror[originId] = true // todo: move to store
+
+        await webhookHandler.createMirror (originService, issue)
+      }
+      else {
+        await webhookHandler.updateMirror (originService, targetIssue)
+        // todo: move to store
+        delete store.issuesWaitingForMirror[originId]
+      }
+
+    })
+  },
+
   handleRequest: async (service, req, res) => {
-    // respond so that youtrack doesn't hang (todo, solve in workflow)
+    // respond so that youtrack doesn't hang... (todo: open an issue about this)
     res.send ()
 
-    throwIfValueNotAllowed (service, ["github", "youtrack"])
+    throwIfValueNotAllowed (service, services)
+    console.log (`Webhook from "${service}"`)
 
     const rb = req.body
-    console.log (`Webhook from "${service}"`)
-    const issue: Issue = await webhookHandler.getIssue (service, rb)
 
-    console.log ({action: rb.action, "issue.id": issue.id, hasComment: rb.comment !== undefined})
+    if (["created", "opened", "comments_changed"].indexOf (rb.action) !== -1) {
+      const issueId: string = webhookHandler.getIssueIdFromRequestBody(service, rb)
+      await webhookHandler.doMirror (service, issueId)
+    }
+
+    return
+
+    const issue: Issue = await webhookHandler.getIssue (service, issueId)
 
     if (rb.action === "opened") {
       // if this is the mirrored issue
@@ -335,40 +375,34 @@ export const webhookHandler = {
     }
   },
 
-  getIssue: async (originService: string, reqBody: Object): Issue => {
-    let rawIssue
+  getIssue: async (originService: string, issueId: string): Issue | void => {
+    let url
 
-    if (originService === "youtrack") {
-      const issueId = reqBody.id
-      rawIssue = await integrationRest ({
-        service: originService,
-        method: "get",
-        url: `issue/${issueId}`,
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
-    else if (originService === "github") {
-      const issueId = reqBody.issue.number
-      rawIssue = await integrationRest ({
-        service: originService,
-        method: "get",
-        url: `repos/${config.github.user}/${config.github.repo}/issues/${issueId}`,
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
+    switch (originService) {
+      case "youtrack":
+        url = `issue/${issueId}`; break
+      case "github":
+        url = `repos/${config.github.user}/${config.github.repo}/issues/${issueId}`; break
     }
 
-    return webhookHandler.getFormatedIssue (originService, rawIssue)
+    const rawIssue = await integrationRest ({
+      service: originService,
+      method: "get",
+      url,
+    })
+    .then ((response) => response.body)
+    .catch ((err) => {})
+
+    return rawIssue && webhookHandler.getFormatedIssue (originService, rawIssue)
   },
 
-  getLabelsFromFields: (fields: Array<{name: string, value: string}>): Array<string> =>
+  getLabelsFromFields: (fields/*: Array<{name: string, value: string}>*/): Array<string> =>
     fields.map ((field) =>
       // add here handles for field.specialAttr
        `${field.name}:${field.value}`),
 
-  getFormatedIssue: (service: string, rawIssue: Object): Issue => {
-    if (service === "github") {
+  getFormatedIssue: (originService: string, rawIssue: Object): Issue => {
+    if (originService === "github") {
       // TODO labels, how to display them on youtrack if origin is github,
       // should fields be permitted to change from github if origin is youtrack?
 
@@ -379,7 +413,7 @@ export const webhookHandler = {
         labels: [],
       }
     }
-    if (service === "youtrack") {
+    if (originService === "youtrack") {
       let title = ""
       let body = ""
       const fields = []
