@@ -42,6 +42,13 @@ export const webhookHandler = {
       knownValue: originId,
     }),
 
+  getTargetIssue: async (originService: string, originId: string, targetService: string): Issue | void => {
+    const targetId: string | void = webhookHandler.getTargetId (originService, originId, targetService)
+    return await targetId && webhookHandler.getIssue (targetService, targetId)
+  },
+
+  getIsIssueOriginal: (issue: Issue): boolean => issue.body.indexOf (mirrorMetaVarName) === -1,
+
   doMirror: async (originService: string, originId: string) => {
     const issue: Issue = await webhookHandler.getIssue (originService, originId)
 
@@ -49,19 +56,36 @@ export const webhookHandler = {
       if (targetService === originService)
         return
 
-      const targetId: string | void = webhookHandler.getTargetId (originService, originId, targetService)
-      const targetIssue: Issue | void = await targetId && webhookHandler.getIssue (targetService, targetId)
+      const targetIssue: Issue | void = await webhookHandler.getTargetIssue (originService, originId, targetService)
 
+      // if no target
       if (targetIssue === undefined) {
-        // raise flag to listen for new mirrorId of originId to sync
-        store.issuesWaitingForMirror[originId] = true // todo: move to store
+        // if original, create target mirror
+        if (webhookHandler.getIsIssueOriginal(issue)) {
+            // raise flag to listen for new mirrorId of originId to sync
+          store.issuesWaitingForMirror[originId] = true // todo: move to store
+          console.log ("1", store, store.issuesWaitingForMirror)
 
-        await webhookHandler.createMirror (originService, issue)
+          await webhookHandler.createMirror (originService, issue)
+        }
+        else {
+          // todo delete
+          throw "issue is a mirror without original"
+        }
       }
+      // if target is found, update it
       else {
+        console.log ("2", store, store.issuesWaitingForMirror)
+        // this does not include comments
         await webhookHandler.updateMirror (originService, targetIssue)
+
         // todo: move to store
         delete store.issuesWaitingForMirror[originId]
+
+        // loop comments of source
+        // if sourceComment, update targetComments
+        // if targetComment, update it with fetched sourceComment
+        // if no sourceComment for targetComment, delete targetComment
       }
 
     })
@@ -72,95 +96,15 @@ export const webhookHandler = {
     res.send ()
 
     throwIfValueNotAllowed (service, services)
-    console.log (`Webhook from "${service}"`)
+    console.log (`Webhook from "${service}", action: ${req.body.action}`)
 
     const rb = req.body
 
-    if (["created", "opened", "comments_changed"].indexOf (rb.action) !== -1) {
+    if (["opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string = webhookHandler.getIssueIdFromRequestBody(service, rb)
       await webhookHandler.doMirror (service, issueId)
     }
 
-    return
-
-    const issue: Issue = await webhookHandler.getIssue (service, issueId)
-
-    if (rb.action === "opened") {
-      // if this is the mirrored issue
-      if (issue.body.indexOf (mirrorMetaVarName) !== -1) {
-        const issueMeta = webhookHandler.getMetaFromBody (issue.body)
-
-        // create mapping with original issue
-        store.issueMappings.add ({
-          knownKey: issueMeta.service,
-          knownValue: issueMeta.id,
-          newKey: service,
-          newValue: issue.id,
-        })
-      }
-      else {
-        // expand mapping with mirror issue
-        store.issueMappings.add ({newKey: service, newValue: issue.id})
-
-        // create mirror issue
-        const createMirrorResponse = await webhookHandler.createMirror (service, issue)
-      }
-    }
-    else if (rb.action === "edited") {
-      if (rb.comment) {
-        const comment: IssueComment = await webhookHandler.getComment (service, rb)
-
-        // skip if mirror issue is edited
-        if (comment.body.indexOf (mirrorMetaVarName) !== -1)
-          return
-
-        const r = await webhookHandler.updateMirrorComment (service, issue, comment)
-      }
-      // issue
-      else {
-        // skip if mirror issue is edited
-        if (issue.body.indexOf (mirrorMetaVarName) !== -1)
-          return
-
-        const r = await webhookHandler.updateMirror (service, issue)
-      }
-    }
-
-    else if (rb.action === "created") {
-      const comment: IssueComment = await webhookHandler.getComment (service, rb)
-
-      // if this is the mirrored comment
-      if (comment.body.indexOf (mirrorMetaVarName) !== -1) {
-        const commentMeta = webhookHandler.getMetaFromBody (comment.body)
-
-        // create mapping with original comment
-        store.commentMappings.add ({
-          knownKey: commentMeta.service,
-          knownValue: commentMeta.id,
-          newKey: service,
-          newValue: comment.id,
-        })
-      }
-      else {
-        // expand mapping with mirror comment
-        store.commentMappings.add ({newKey: service, newValue: comment.id})
-
-        const r = await webhookHandler.createMirrorComment (service, issue, comment)
-      }
-    }
-    else if (rb.action === "deleted") {
-      if (rb.comment) {
-        const r = await webhookHandler.deleteComment (service, rb)
-      }
-      // issue
-      else {
-        // only youtrack can delete, for github:
-          // change title to <deleted>
-          // set body to empty string
-          // close issue
-          // remove all comments
-      }
-    }
   },
 
   deleteComment: async (originService, reqBody: Object) => {
@@ -376,22 +320,28 @@ export const webhookHandler = {
   },
 
   getIssue: async (originService: string, issueId: string): Issue | void => {
-    let url
+    const restParams = {service: originService}
 
     switch (originService) {
-      case "youtrack":
-        url = `issue/${issueId}`; break
-      case "github":
-        url = `repos/${config.github.user}/${config.github.repo}/issues/${issueId}`; break
+      case "youtrack": {
+        restParams.method = "get"
+        restParams.url = `issue/${issueId}`
+        break
+      }
+      case "github": {
+        restParams.method = "get"
+        restParams.url = `repos/${config.github.user}/${config.github.repo}/issues/${issueId}`
+        break
+      }
     }
 
-    const rawIssue = await integrationRest ({
-      service: originService,
-      method: "get",
-      url,
-    })
+    const rawIssue = await integrationRest (restParams)
     .then ((response) => response.body)
-    .catch ((err) => {})
+    .catch ((err) => {
+      // catch only if not found
+      if (err.status !== 404)
+        throw err
+    })
 
     return rawIssue && webhookHandler.getFormatedIssue (originService, rawIssue)
   },
@@ -484,52 +434,43 @@ export const webhookHandler = {
   },
 
   updateMirror: async (originService: string, issue: Issue) => {
-    if (originService === "youtrack") {
-      const targetService = "github"
+    services.forEach (async (targetService) => {
+      if (targetService === originService)
+        return
 
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: originService,
-        knownValue: issue.id,
-      })
+      const targetId: string = webhookHandler.getTargetId (originService, issue.id, targetService)
 
-      return await integrationRest({
-        service: targetService,
-        method: "patch",
-        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}`,
-        data: {
-          title: issue.title,
-          body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
-          labels: issue.labels,
-        },
-      })
+      const restParams = {service: targetService}
+
+      switch (originService) {
+        case "youtrack": {
+          restParams.method = "patch"
+          restParams.url = `repos/${config.github.user}/${config.github.repo}/issues/${targetId}`
+          restParams.data = {
+            title: issue.title,
+            body: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
+            labels: issue.labels,
+          }
+          break
+        }
+        case "github": {
+          restParams.method = "post"
+          restParams.url = `issue/${targetId}`
+          restParams.query = {
+            // todo: move to issue.project
+            project: "GI",
+            summary: issue.title,
+            description: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
+          }
+          break
+        }
+      }
+
+      return await integrationRest(restParams)
       .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
+      .catch ((err) => {throw err})
+    })
 
-    if (originService === "github") {
-      const targetService = "youtrack"
-
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: originService,
-        knownValue: issue.id,
-      })
-
-      return await integrationRest ({
-        service: targetService,
-        method: "post",
-        url: `issue/${mirrorId}`,
-        query: {
-          // todo: move to issue.project
-          project: "GI",
-          summary: issue.title,
-          description: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
-        },
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
   },
 
   createMirrorComment: async (originService: string, issue: Issue, comment: IssueComment) => {
