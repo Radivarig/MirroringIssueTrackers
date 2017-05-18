@@ -49,8 +49,8 @@ export const webhookHandler = {
       if (targetService === originService)
         return
 
-      const targetId: string = webhookHandler.getTargetId (originService, originId, targetService)
-      const targetIssue = await webhookHandler.getIssue (targetService, targetId)
+      const targetId: string | void = webhookHandler.getTargetId (originService, originId, targetService)
+      const targetIssue: Issue | void = await targetId && webhookHandler.getIssue (targetService, targetId)
 
       if (targetIssue === undefined) {
         // raise flag to listen for new mirrorId of originId to sync
