@@ -7,7 +7,7 @@
   "scripts": {
     "build": "webpack --progress --build",
     "watch": "webpack --progress --watch",
-    "start": "nodemon ./src/server.js --exec babel-node",
+    "start": "nodemon ./src/server.js --exec babel-node --trace-warnings",
     "start:build": "nodemon ./build/backend.js",
     "test": "mocha --compilers js:babel-core/register",
     "test:watch": "mocha --compilers js:babel-core/register --watch"
