@@ -2,7 +2,6 @@
     "plugins": [
         ["flow-runtime", {
             "assert": true,
-            "decorate": true
         }],
         "transform-flow-strip-types",
         "transform-async-to-generator",
