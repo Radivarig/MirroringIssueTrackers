@@ -14,7 +14,13 @@ export default async (opts) => {
   throwIfValueNotAllowed (method, ["get", "put", "post", "patch", "delete"])
   throwIfValueNotAllowed (service, ["youtrack", "github"])
 
-  const baseUrl = service === "github" ? config.github.url : config.youtrack.url
+  let baseUrl
+  switch (service) {
+    case "github":
+      baseUrl = config.github.url; break
+    case "youtrack":
+      baseUrl = config.youtrack.url; break
+  }
   const requestUrl = `https://${path.join (baseUrl, url)}`
 
   const toSet = {
@@ -24,7 +30,7 @@ export default async (opts) => {
       : `token ${config.github.token}`,
   }
 
-  console.log ({method, service, requestUrl})
+  console.log (method, service, requestUrl)
   return await request[method] (requestUrl)
     .set (toSet)
     .query (query)
