@@ -81,12 +81,6 @@ export const webhookHandler = {
       if (targetIssue === undefined) {
         // if original, create target mirror
         if (webhookHandler.getIsIssueOriginal(issue)) {
-
-          // raise flag to listen for new mirrorId of originId to sync
-          store.issuesWaitingForMirror[originId] = true // todo: move to store
-
-          console.log ("1", store, store.issuesWaitingForMirror)
-
           await webhookHandler.createMirror (originService, issue)
         }
         else {
@@ -100,9 +94,6 @@ export const webhookHandler = {
           // this does not sync comments, see below
           await webhookHandler.updateMirror (originService, targetIssue)
         }
-
-        // todo: move to store
-        delete store.issuesWaitingForMirror[originId]
 
         // loop comments of source
         // if sourceComment, update targetComments

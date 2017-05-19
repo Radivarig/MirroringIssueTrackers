@@ -58,5 +58,4 @@ export class Mapping {
 export default {
   issueMappings: new Mapping (),
   commentMappings: new Mapping (),
-  issuesWaitingForMirror: {},
 }
