@@ -1,13 +1,5 @@
-import mobx, {observable, computed} from 'mobx'
-
 export class Mapping {
-  constructor () {
-    // mobx.autorun(() => console.log(this.report))
-  }
-
-  @observable pendingRequests = 0
-
-  @observable mappings = []
+  mappings = []
 
   getValueByKeyAndKnownKeyValue (opts) {
     const key: string = opts.key
@@ -44,8 +36,10 @@ export class Mapping {
         // iterate keys
         for (const key in mapping) {
           // if known key-value match
-          if (key === knownKey && mapping[knownKey] === knownValue)
+          if (key === knownKey && mapping[knownKey] === knownValue) {
             mapping[newKey] = newValue
+            console.log ("mapping", newKey, newValue, mapping, this.mappings)
+          }
         }
       }
     }
@@ -61,8 +55,8 @@ export class Mapping {
   }
 */
 
-export default class Store {
-  issueMappings: Mapping = new Mapping ()
-  commentMappings: Mapping = new Mapping ()
-  issuesWaitingForMirror: Object = {}
+export default {
+  issueMappings: new Mapping (),
+  commentMappings: new Mapping (),
+  issuesWaitingForMirror: {},
 }
