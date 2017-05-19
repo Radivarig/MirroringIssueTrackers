@@ -9,7 +9,7 @@ import config from "../config/integration.config"
 import {throwIfValueNotAllowed} from './helpers'
 
 import Store from './Store'
-const store = new Store ()
+const store = Store // new Store ()
 
 const mirrorMetaVarName = "MIRROR_META"
 
@@ -42,15 +42,34 @@ export const webhookHandler = {
       knownValue: originId,
     }),
 
-  getTargetIssue: async (originService: string, originId: string, targetService: string): Issue | void => {
+  getTargetIssue: async (originService: string, originId: string, targetService: string): Promise<Issue | void> => {
     const targetId: string | void = webhookHandler.getTargetId (originService, originId, targetService)
     return await targetId && webhookHandler.getIssue (targetService, targetId)
   },
 
   getIsIssueOriginal: (issue: Issue): boolean => issue.body.indexOf (mirrorMetaVarName) === -1,
 
+  addIssueIdToMapping (originService: string, issue: Issue) {
+    if (webhookHandler.getIsIssueOriginal (issue)) {
+      store.issueMappings.add ({newKey: originService, newValue: issue.id})
+    }
+    else {
+      const issueMeta = webhookHandler.getIssueMeta (issue)
+
+      // create mapping to original
+      store.issueMappings.add ({
+        knownKey: issueMeta.service,
+        knownValue: issueMeta.id,
+        newKey: originService,
+        newValue: issue.id,
+      })
+    }
+  },
+
   doMirror: async (originService: string, originId: string) => {
     const issue: Issue = await webhookHandler.getIssue (originService, originId)
+
+    webhookHandler.addIssueIdToMapping (originService, issue)
 
     services.forEach (async (targetService) => {
       if (targetService === originService)
@@ -62,22 +81,25 @@ export const webhookHandler = {
       if (targetIssue === undefined) {
         // if original, create target mirror
         if (webhookHandler.getIsIssueOriginal(issue)) {
-            // raise flag to listen for new mirrorId of originId to sync
+
+          // raise flag to listen for new mirrorId of originId to sync
           store.issuesWaitingForMirror[originId] = true // todo: move to store
+
           console.log ("1", store, store.issuesWaitingForMirror)
 
           await webhookHandler.createMirror (originService, issue)
         }
         else {
           // todo delete
-          throw "issue is a mirror without original"
+          throw `issue is a mirror without original${issue.id}`
         }
       }
-      // if target is found, update it
+      // if target is found
       else {
-        console.log ("2", store, store.issuesWaitingForMirror)
-        // this does not include comments
-        await webhookHandler.updateMirror (originService, targetIssue)
+        if (webhookHandler.getIsIssueOriginal (issue)) {
+          // this does not sync comments, see below
+          await webhookHandler.updateMirror (originService, targetIssue)
+        }
 
         // todo: move to store
         delete store.issuesWaitingForMirror[originId]
@@ -92,7 +114,7 @@ export const webhookHandler = {
   },
 
   handleRequest: async (service, req, res) => {
-    // respond so that youtrack doesn't hang... (todo: open an issue about this)
+    // respond so that youtrack doesn't hang... (opened an issue about it)
     res.send ()
 
     throwIfValueNotAllowed (service, services)
@@ -390,11 +412,11 @@ export const webhookHandler = {
 
   wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
 
-  getMetaFromBody: (issueBody): Object | void => {
+  getIssueMeta: (issue: Issue): Object | void => {
     const varStart = `<!--${mirrorMetaVarName}=`
     const varEnd = "-->"
     const regexStr = `${varStart}(.*)${varEnd}`
-    const regexRE = issueBody.match(new RegExp(regexStr))
+    const regexRE = issue.body.match(new RegExp(regexStr))
     if (regexRE && regexRE.length > 1)
       return JSON.parse(regexRE[1])
   },
