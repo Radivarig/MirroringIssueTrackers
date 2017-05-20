@@ -7,6 +7,7 @@ const compression = require('compression')
 const whitelist = require('./whitelist')
 
 import {webhookHandler} from './serverAPI'
+webhookHandler.doInitialMapping ()
 
 const allowCrossDomain = function (req, res, next) {
   res.header('Access-Control-Allow-Origin', whitelist)

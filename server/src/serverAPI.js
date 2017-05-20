@@ -21,9 +21,41 @@ const fieldsToIncludeAsLabels = [
 ]
 
 const services = ["github", "youtrack"]
+const youtrackProject = "GI"
 // ===
 
 export const webhookHandler = {
+  doInitialMapping: async () => {
+    services.forEach (async (service) => {
+      const issues = await webhookHandler.getProjectIssues (service)
+      console.log (service, issues[0])
+    })
+  },
+
+  getProjectIssues: async (originService: string) => {
+    const restParams = {
+      service: originService,
+      method: "get",
+    }
+
+    switch (originService) {
+      case "youtrack": restParams.url = `issue/byproject/${youtrackProject}`; break
+      case "github": restParams.url = `repos/${config.github.user}/${config.github.repo}/issues`; break
+    }
+
+    const rawIssues = await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
+
+    const issues = []
+    for (let i = 0; i < rawIssues.length; ++i) {
+      const rawIssue = rawIssues[i]
+      const issue = await webhookHandler.getFormatedIssue (originService, rawIssue)
+      issues.push (issue)
+    }
+    return issues
+  },
+
   doStuff: async (req, res) => {
     res.send (`<pre>${JSON.stringify(store, null, "    ")}</pre>`)
   },
@@ -471,7 +503,7 @@ export const webhookHandler = {
           restParams.url = `issue/${targetId}`
           restParams.query = {
             // todo: move to issue.project
-            project: "GI",
+            project: youtrackProject,
             summary: issue.title,
             description: issue.body + webhookHandler.getMirrorSignature (originService, targetService, issue),
           }
@@ -564,7 +596,7 @@ export const webhookHandler = {
         url: "issue",
         query: {
           // todo: move to issue.project
-          project: "GI",
+          project: youtrackProject,
           summary: issue.title,
           description: `${issue.body}\n\n${signature}`,
         },
