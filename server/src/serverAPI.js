@@ -26,10 +26,32 @@ const youtrackProject = "GI"
 
 export const webhookHandler = {
   doInitialMapping: async () => {
-    services.forEach (async (service) => {
-      const issues = await webhookHandler.getProjectIssues (service)
-      console.log (service, issues[0])
-    })
+    const issuesObj = {}
+
+    for (let i = 0; i < services.length; ++i) {
+      const service = services[i]
+      issuesObj[service] = await webhookHandler.getProjectIssues (service)
+
+      // recreate id mappings
+      for (let j = 0; j < issuesObj[service].length; ++j) {
+        const issue = issuesObj[service][j]
+
+        webhookHandler.addIssueIdToMapping (service, issue)
+      }
+
+      console.log ({service, issues: issuesObj[service]})
+    }
+
+    return
+    // iterate keys
+    for (const service in issuesObj) {
+      for (let i = 0; i < issuesObj[service].length; ++i) {
+        const issue = issuesObj[service][i]
+        // sync
+        await webhookHandler.doMirror(service, issue)
+      }
+    }
+
   },
 
   getProjectIssues: async (originService: string) => {
@@ -39,8 +61,15 @@ export const webhookHandler = {
     }
 
     switch (originService) {
-      case "youtrack": restParams.url = `issue/byproject/${youtrackProject}`; break
-      case "github": restParams.url = `repos/${config.github.user}/${config.github.repo}/issues`; break
+      case "youtrack":
+        restParams.url = `issue/byproject/${youtrackProject}`
+        break
+      case "github":
+        restParams.url = `repos/${config.github.user}/${config.github.repo}/issues`
+        restParams.data = {
+          state: "open",// "all",
+        }
+        break
     }
 
     const rawIssues = await integrationRest (restParams)
@@ -81,7 +110,7 @@ export const webhookHandler = {
 
   getIsIssueOriginal: (issue: Issue): boolean => issue.body.indexOf (mirrorMetaVarName) === -1,
 
-  addIssueIdToMapping (originService: string, issue: Issue) {
+  addIssueIdToMapping: (originService: string, issue: Issue) => {
     if (webhookHandler.getIsIssueOriginal (issue)) {
       store.issueMappings.add ({newKey: originService, newValue: issue.id})
     }
@@ -98,9 +127,17 @@ export const webhookHandler = {
     }
   },
 
-  doMirror: async (originService: string, originId: string) => {
-    const issue: Issue = await webhookHandler.getIssue (originService, originId)
-
+  doMirror: async (originService: string, idOrIssue: string | Issue) => {
+    let originId
+    let issue
+    if (typeof idOrIssue === "string") {
+      originId = idOrIssue
+      issue = await webhookHandler.getIssue (originService, originId)
+    }
+    else {
+      issue = idOrIssue
+      originId = issue.id
+    }
     webhookHandler.addIssueIdToMapping (originService, issue)
 
     services.forEach (async (targetService) => {
