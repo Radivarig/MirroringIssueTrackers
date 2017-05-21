@@ -148,6 +148,7 @@ export const webhookHandler = {
       issue = idOrIssue
       originId = issue.id
     }
+
     webhookHandler.addIssueIdToMapping (originService, issue)
 
     services.forEach (async (targetService) => {
@@ -164,14 +165,14 @@ export const webhookHandler = {
         }
         else {
           // todo delete
-          throw `issue is a mirror without original${issue.id}`
+          console.log (`issue is a mirror without original: ${issue.id}`)
         }
       }
       // if target is found
       else {
-        if (webhookHandler.getIsIssueOriginal (issue)) {
+        if (webhookHandler.getIsIssueOriginal (targetIssue)) {
           // this does not sync comments, see below
-          await webhookHandler.updateMirror (originService, targetIssue)
+          await webhookHandler.updateMirror (targetService, targetIssue)
         }
 
         // loop comments of source
