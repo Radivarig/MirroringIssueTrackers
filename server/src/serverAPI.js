@@ -403,6 +403,7 @@ export const webhookHandler = {
       return {
         id: rawComment.id.toString(),
         body: rawComment.text,
+        service,
       }
     }
 
@@ -410,6 +411,7 @@ export const webhookHandler = {
       return {
         id: rawComment.id.toString(),
         body: rawComment.body,
+        service,
       }
     }
   },
@@ -446,8 +448,8 @@ export const webhookHandler = {
       // add here handles for field.specialAttr
        `${field.name}:${field.value}`),
 
-  getFormatedIssue: (sourceService: string, rawIssue: Object): Issue => {
-    if (sourceService === "github") {
+  getFormatedIssue: (service: string, rawIssue: Object): Issue => {
+    if (service === "github") {
       // TODO labels, how to display them on youtrack if source is github,
       // should fields be permitted to change from github if source is youtrack?
 
@@ -455,10 +457,11 @@ export const webhookHandler = {
         id: rawIssue.number.toString(),
         title: rawIssue.title,
         body: rawIssue.body,
+        service,
         labels: [],
       }
     }
-    if (sourceService === "youtrack") {
+    if (service === "youtrack") {
       let title = ""
       let body = ""
       const fields = []
@@ -478,6 +481,7 @@ export const webhookHandler = {
         id: rawIssue.id,
         title,
         body,
+        service,
         labels,
       }
     }
