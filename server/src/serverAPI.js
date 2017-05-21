@@ -35,7 +35,7 @@ export const webhookHandler = {
       for (let j = 0; j < issuesObj[service].length; ++j) {
         const issue = issuesObj[service][j]
 
-        webhookHandler.addIssueIdToMapping (service, issue)
+        webhookHandler.addIssueIdToMapping (issue)
       }
     }
 
@@ -110,13 +110,13 @@ export const webhookHandler = {
 
   getIsIssueOriginal: (issue: Issue): boolean => issue.body.indexOf (mirrorMetaVarName) === -1,
 
-  addIssueIdToMapping: (sourceService: string, issue: Issue) => {
+  addIssueIdToMapping: (issue: Issue) => {
     if (webhookHandler.getIsIssueOriginal (issue)) {
       store.issueMappings.add ({
-        newKey: sourceService,
+        newKey: issue.service,
         newValue: issue.id,
         assign: {
-          original: sourceService,
+          original: issue.service,
         },
       })
     }
@@ -127,7 +127,7 @@ export const webhookHandler = {
       store.issueMappings.add ({
         knownKey: issueMeta.service,
         knownValue: issueMeta.id,
-        newKey: sourceService,
+        newKey: issue.service,
         newValue: issue.id,
         assign: {
           original: issueMeta.service,
@@ -139,7 +139,7 @@ export const webhookHandler = {
   doMirror: async (sourceService: string, issueOrId: string | Issue) => {
     const sourceIssue: Issue = await webhookHandler.getIssueFromIssueOrId (sourceService, issueOrId)
 
-    webhookHandler.addIssueIdToMapping (sourceService, sourceIssue)
+    webhookHandler.addIssueIdToMapping (sourceIssue)
 
     services.forEach (async (targetService) => {
       let targetIssue
@@ -147,13 +147,13 @@ export const webhookHandler = {
       if (targetService === sourceService)
         targetIssue = sourceIssue
       else
-        targetIssue = await webhookHandler.getTargetIssue (sourceService, sourceIssue.id, targetService)
+        targetIssue = await webhookHandler.getTargetIssue (sourceIssue.service, sourceIssue.id, targetService)
 
       // if no target
       if (targetIssue === undefined) {
         // if original, create target mirror
         if (webhookHandler.getIsIssueOriginal(sourceIssue)) {
-          await webhookHandler.createMirror (sourceService, sourceIssue)
+          await webhookHandler.createMirror (sourceIssue)
         }
         else {
           // todo delete
@@ -167,7 +167,7 @@ export const webhookHandler = {
           // todo, skip if there is no change, add flag synced
 
           // this does not sync comments, see below
-          await webhookHandler.updateMirror (targetService, targetIssue)
+          await webhookHandler.updateMirror (targetIssue)
         }
 
         // loop comments of source
@@ -532,22 +532,27 @@ export const webhookHandler = {
       return `{html}${issueHtmlComment}{html}`
   },
 
-  updateMirror: async (sourceService: string, issue: Issue) => {
+  updateMirror: async (sourceIssue: Issue) => {
     services.forEach (async (targetService) => {
-      if (targetService === sourceService)
+      if (targetService === sourceIssue.service)
         return
 
-      const targetId: string = webhookHandler.getTargetId (sourceService, issue.id, targetService)
+      const targetId = webhookHandler.getTargetId (sourceIssue.service, sourceIssue.id, targetService)
+
+      if (!targetId) {
+        console.log (`no target (${targetService}) for (${sourceIssue.service}:${sourceIssue.id})`)
+        return
+      }
 
       const restParams = {service: targetService}
-      switch (sourceService) {
+      switch (sourceIssue.service) {
         case "youtrack": {
           restParams.method = "patch"
           restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${targetId}`
           restParams.data = {
-            title: issue.title,
-            body: issue.body + webhookHandler.getMirrorSignature (sourceService, targetService, issue),
-            labels: issue.labels,
+            title: sourceIssue.title,
+            body: sourceIssue.body + webhookHandler.getMirrorSignature (sourceIssue.service, targetService, sourceIssue),
+            labels: sourceIssue.labels,
           }
           break
         }
@@ -555,10 +560,10 @@ export const webhookHandler = {
           restParams.method = "post"
           restParams.url = `issue/${targetId}`
           restParams.query = {
-            // todo: move to issue.project
+            // todo: move to sourceIssue.project
             project: config.youtrack.project,
-            summary: issue.title,
-            description: issue.body + webhookHandler.getMirrorSignature (sourceService, targetService, issue),
+            summary: sourceIssue.title,
+            description: sourceIssue.body + webhookHandler.getMirrorSignature (sourceIssue.service, targetService, sourceIssue),
           }
           break
         }
@@ -619,45 +624,43 @@ export const webhookHandler = {
     }
   },
 
-  createMirror: async (sourceService: string, issue: Issue) => {
-    if (sourceService === "youtrack") {
-      const targetService = "github"
+  createMirror: async (sourceIssue: Issue) => {
+    services.forEach (async (targetService) => {
+      if (targetService === sourceIssue.service)
+        return
 
-      const signature: string = webhookHandler.getMirrorSignature (sourceService, targetService, issue)
+      const signature: string = webhookHandler.getMirrorSignature (sourceIssue.service, targetService, sourceIssue)
 
-      return await integrationRest({
-        service: targetService,
-        method: "post",
-        url: `repos/${config.github.user}/${config.github.project}/issues`,
-        data: {
-          title: issue.title,
-          body: `${issue.body}\n\n${signature}`,
-          labels: issue.labels,
-        },
-      })
+      const restParams = {service: targetService}
+
+      switch (targetService) {
+        case "github": {
+          restParams.method = "post"
+          restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
+          restParams.data = {
+            title: sourceIssue.title,
+            body: `${sourceIssue.body}\n\n${signature}`,
+            labels: sourceIssue.labels,
+          }
+          break
+        }
+        case "youtrack": {
+          restParams.method = "put"
+          restParams.url = "issue"
+          restParams.query = {
+            // todo: move to sourceIssue.project
+            project: config.youtrack.project,
+            summary: sourceIssue.title,
+            description: `${sourceIssue.body}\n\n${signature}`,
+          }
+          break
+        }
+      }
+
+      await integrationRest (restParams)
       .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
-
-    if (sourceService === "github") {
-      const targetService = "youtrack"
-
-      const signature: string = webhookHandler.getMirrorSignature (sourceService, targetService, issue)
-      return await integrationRest ({
-        service: targetService,
-        method: "put",
-        url: "issue",
-        query: {
-          // todo: move to issue.project
-          project: config.youtrack.project,
-          summary: issue.title,
-          description: `${issue.body}\n\n${signature}`,
-        },
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-
-    }
+      .catch ((err) => {throw err})
+    })
   },
 
 }
