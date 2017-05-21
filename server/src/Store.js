@@ -23,26 +23,28 @@ export class Mapping {
     const newKey: string = opts.newKey
     const {knownValue, newValue} = opts
 
-    // adding first time
-    if (knownKey === undefined) {
-      const mapping = {}
-      mapping[newKey] = newValue
-      this.mappings.push (mapping)
-    }
-    // adding new mapping to existing key-value
-    else {
-      // iterate array
-      for (const mapping of this.mappings) {
-        // iterate keys
-        for (const key in mapping) {
-          // if known key-value match
-          if (key === knownKey && mapping[knownKey] === knownValue) {
-            mapping[newKey] = newValue
-            console.log ("mapping", newKey, newValue, mapping, this.mappings)
-          }
+    // iterate array
+    for (const mapping of this.mappings) {
+      // iterate keys
+      for (const key in mapping) {
+        // if known key-value match
+        if (knownKey && key === knownKey && mapping[knownKey] === knownValue) {
+          mapping[newKey] = newValue
+          return
         }
+
+        // return if new key already exists
+        if (key === newKey && mapping[newKey] === newValue)
+          return
+
       }
     }
+    // adding first time
+    const mapping = {}
+    if (knownKey)
+      mapping[knownKey] = knownValue
+    mapping[newKey] = newValue
+    this.mappings.push (mapping)
   }
 
 }
