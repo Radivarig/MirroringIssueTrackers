@@ -112,7 +112,13 @@ export const webhookHandler = {
 
   addIssueIdToMapping: (originService: string, issue: Issue) => {
     if (webhookHandler.getIsIssueOriginal (issue)) {
-      store.issueMappings.add ({newKey: originService, newValue: issue.id})
+      store.issueMappings.add ({
+        newKey: originService,
+        newValue: issue.id,
+        assign: {
+          original: originService,
+        },
+      })
     }
     else {
       const issueMeta = webhookHandler.getIssueMeta (issue)
@@ -123,6 +129,9 @@ export const webhookHandler = {
         knownValue: issueMeta.id,
         newKey: originService,
         newValue: issue.id,
+        assign: {
+          original: issueMeta.service,
+        },
       })
     }
   },

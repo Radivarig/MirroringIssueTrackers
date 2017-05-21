@@ -22,14 +22,16 @@ export class Mapping {
     const knownKey: string | void = opts.knownKey
     const newKey: string = opts.newKey
     const {knownValue, newValue} = opts
+    const assign: Object = opts.assign || {}
 
     // iterate array
-    for (const mapping of this.mappings) {
+    for (const mapping of this.mappings) { // eslint-disable-line no-shadow
       // iterate keys
       for (const key in mapping) {
         // if known key-value match
         if (knownKey && key === knownKey && mapping[knownKey] === knownValue) {
           mapping[newKey] = newValue
+          Object.assign (mapping, assign)
           return
         }
 
@@ -44,6 +46,8 @@ export class Mapping {
     if (knownKey)
       mapping[knownKey] = knownValue
     mapping[newKey] = newValue
+    Object.assign (mapping, assign)
+
     this.mappings.push (mapping)
   }
 
