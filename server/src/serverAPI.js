@@ -152,10 +152,12 @@ export const webhookHandler = {
     webhookHandler.addIssueIdToMapping (originService, issue)
 
     services.forEach (async (targetService) => {
-      if (targetService === originService)
-        return
+      let targetIssue
 
-      const targetIssue: Issue | void = await webhookHandler.getTargetIssue (originService, originId, targetService)
+      if (targetService === originService)
+        targetIssue = issue
+      else
+        targetIssue = await webhookHandler.getTargetIssue (originService, originId, targetService)
 
       // if no target
       if (targetIssue === undefined) {
@@ -165,12 +167,15 @@ export const webhookHandler = {
         }
         else {
           // todo delete
-          console.log (`issue is a mirror without original: ${issue.id}`)
+          // todo add flag deleted
+          console.log (`Issue is a mirror without original: ${originService}, ${issue.id}`)
         }
       }
       // if target is found
       else {
         if (webhookHandler.getIsIssueOriginal (targetIssue)) {
+          // todo, skip if there is no change, add flag synced
+
           // this does not sync comments, see below
           await webhookHandler.updateMirror (targetService, targetIssue)
         }
@@ -534,7 +539,6 @@ export const webhookHandler = {
       const targetId: string = webhookHandler.getTargetId (originService, issue.id, targetService)
 
       const restParams = {service: targetService}
-
       switch (originService) {
         case "youtrack": {
           restParams.method = "patch"
