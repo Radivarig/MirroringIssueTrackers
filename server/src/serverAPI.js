@@ -168,6 +168,10 @@ export const webhookHandler = {
 
           // this does not sync comments, see below
           await webhookHandler.updateMirror (targetIssue)
+
+          const comments = await webhookHandler.getComments (targetIssue)
+
+          console.log ({comments})
         }
 
         // loop comments of source
@@ -369,6 +373,31 @@ export const webhookHandler = {
       return await webhookHandler.getIssue (service, issueOrId)
 
     return issueOrId
+  },
+
+  getComments: async (sourceIssue: Issue): Array<IssueComment> => {
+    const restParams = {
+      method: "get",
+      service: sourceIssue.service,
+    }
+
+    switch (sourceIssue.service) {
+      case "youtrack": {
+        restParams.url = `issue/${sourceIssue.id}/comment`
+        break
+      }
+      case "github": {
+        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${sourceIssue.id}/comments`
+        break
+      }
+    }
+
+    const rawComments = await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
+
+    return rawComments.map (((rawComment) =>
+      webhookHandler.getFormatedComment (sourceIssue.service, rawComment)))
   },
 
   getComment: async (sourceService: string, reqBody: Object): IssueComment => {
