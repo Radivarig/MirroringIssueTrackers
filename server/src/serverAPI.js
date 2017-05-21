@@ -21,7 +21,6 @@ const fieldsToIncludeAsLabels = [
 ]
 
 const services = ["github", "youtrack"]
-const youtrackProject = "GI"
 // ===
 
 export const webhookHandler = {
@@ -59,10 +58,10 @@ export const webhookHandler = {
 
     switch (sourceService) {
       case "youtrack":
-        restParams.url = `issue/byproject/${youtrackProject}`
+        restParams.url = `issue/byproject/${config.youtrack.project}`
         break
       case "github":
-        restParams.url = `repos/${config.github.user}/${config.github.repo}/issues`
+        restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
         restParams.data = {
           state: "open",// "all",
         }
@@ -275,7 +274,7 @@ export const webhookHandler = {
       const githubComments = await integrationRest ({
         service: targetService,
         method: "get",
-        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}/comments`,
+        url: `repos/${config.github.user}/${config.github.project}/issues/${mirrorId}/comments`,
       })
       .then ((response) => response.body)
       .catch ((err) => console.log ({status: err.status}))
@@ -293,7 +292,7 @@ export const webhookHandler = {
           const r = await integrationRest ({
             service: targetService,
             method: "delete",
-            url: `repos/${config.github.user}/${config.github.repo}/issues/comments/${githubCommentId}`,
+            url: `repos/${config.github.user}/${config.github.project}/issues/comments/${githubCommentId}`,
           })
           .then ((response) => response.body)
           .catch ((err) => console.log ({status: err.status}))
@@ -335,7 +334,7 @@ export const webhookHandler = {
       return await integrationRest({
         service: targetService,
         method: "patch",
-        url: `repos/${config.github.user}/${config.github.repo}/issues/comments/${mirrorCommentId}`,
+        url: `repos/${config.github.user}/${config.github.project}/issues/comments/${mirrorCommentId}`,
         data: {
           body: `${comment.body}\n\n${commentSignature}`,
         },
@@ -392,7 +391,7 @@ export const webhookHandler = {
       rawComment = await integrationRest ({
         service: sourceService,
         method: "get",
-        url: `repos/${config.github.user}/${config.github.repo}/issues/comments/${reqBody.comment.id}`,
+        url: `repos/${config.github.user}/${config.github.project}/issues/comments/${reqBody.comment.id}`,
       })
       .then ((response) => response.body)
 
@@ -428,7 +427,7 @@ export const webhookHandler = {
       }
       case "github": {
         restParams.method = "get"
-        restParams.url = `repos/${config.github.user}/${config.github.repo}/issues/${issueId}`
+        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${issueId}`
         break
       }
     }
@@ -542,7 +541,7 @@ export const webhookHandler = {
       switch (sourceService) {
         case "youtrack": {
           restParams.method = "patch"
-          restParams.url = `repos/${config.github.user}/${config.github.repo}/issues/${targetId}`
+          restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${targetId}`
           restParams.data = {
             title: issue.title,
             body: issue.body + webhookHandler.getMirrorSignature (sourceService, targetService, issue),
@@ -555,7 +554,7 @@ export const webhookHandler = {
           restParams.url = `issue/${targetId}`
           restParams.query = {
             // todo: move to issue.project
-            project: youtrackProject,
+            project: config.youtrack.project,
             summary: issue.title,
             description: issue.body + webhookHandler.getMirrorSignature (sourceService, targetService, issue),
           }
@@ -585,7 +584,7 @@ export const webhookHandler = {
       return await integrationRest({
         service: targetService,
         method: "post",
-        url: `repos/${config.github.user}/${config.github.repo}/issues/${mirrorId}/comments`,
+        url: `repos/${config.github.user}/${config.github.project}/issues/${mirrorId}/comments`,
         data: {
           body: `${comment.body}\n\n${commentSignature}`,
         },
@@ -627,7 +626,7 @@ export const webhookHandler = {
       return await integrationRest({
         service: targetService,
         method: "post",
-        url: `repos/${config.github.user}/${config.github.repo}/issues`,
+        url: `repos/${config.github.user}/${config.github.project}/issues`,
         data: {
           title: issue.title,
           body: `${issue.body}\n\n${signature}`,
@@ -648,7 +647,7 @@ export const webhookHandler = {
         url: "issue",
         query: {
           // todo: move to issue.project
-          project: youtrackProject,
+          project: config.youtrack.project,
           summary: issue.title,
           description: `${issue.body}\n\n${signature}`,
         },
