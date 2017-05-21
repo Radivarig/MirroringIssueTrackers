@@ -38,11 +38,8 @@ export const webhookHandler = {
 
         webhookHandler.addIssueIdToMapping (service, issue)
       }
-
-      console.log ({service, issues: issuesObj[service]})
     }
 
-    return
     // iterate keys
     for (const service in issuesObj) {
       for (let i = 0; i < issuesObj[service].length; ++i) {
@@ -103,9 +100,13 @@ export const webhookHandler = {
       knownValue: originId,
     }),
 
-  getTargetIssue: async (originService: string, originId: string, targetService: string): Promise<Issue | void> => {
+  getTargetIssue: async (originService: string, originId: string, targetService: string): Issue | void => {
     const targetId: string | void = webhookHandler.getTargetId (originService, originId, targetService)
-    return await targetId && webhookHandler.getIssue (targetService, targetId)
+
+    if (!targetId)
+      return
+
+    return await webhookHandler.getIssue (targetService, targetId)
   },
 
   getIsIssueOriginal: (issue: Issue): boolean => issue.body.indexOf (mirrorMetaVarName) === -1,
