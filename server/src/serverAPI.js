@@ -136,38 +136,29 @@ export const webhookHandler = {
     }
   },
 
-  doMirror: async (sourceService: string, idOrIssue: string | Issue) => {
-    let sourceId
-    let issue
-    if (typeof idOrIssue === "string") {
-      sourceId = idOrIssue
-      issue = await webhookHandler.getIssue (sourceService, sourceId)
-    }
-    else {
-      issue = idOrIssue
-      sourceId = issue.id
-    }
+  doMirror: async (sourceService: string, issueOrId: string | Issue) => {
+    const sourceIssue: Issue = await webhookHandler.getIssueFromIssueOrId (sourceService, issueOrId)
 
-    webhookHandler.addIssueIdToMapping (sourceService, issue)
+    webhookHandler.addIssueIdToMapping (sourceService, sourceIssue)
 
     services.forEach (async (targetService) => {
       let targetIssue
 
       if (targetService === sourceService)
-        targetIssue = issue
+        targetIssue = sourceIssue
       else
-        targetIssue = await webhookHandler.getTargetIssue (sourceService, sourceId, targetService)
+        targetIssue = await webhookHandler.getTargetIssue (sourceService, sourceIssue.id, targetService)
 
       // if no target
       if (targetIssue === undefined) {
         // if original, create target mirror
-        if (webhookHandler.getIsIssueOriginal(issue)) {
-          await webhookHandler.createMirror (sourceService, issue)
+        if (webhookHandler.getIsIssueOriginal(sourceIssue)) {
+          await webhookHandler.createMirror (sourceService, sourceIssue)
         }
         else {
           // todo delete
           // todo add flag deleted
-          console.log (`Issue is a mirror without original: ${sourceService}, ${issue.id}`)
+          console.log (`Issue is a mirror without original: ${sourceService}, ${sourceIssue.id}`)
         }
       }
       // if target is found
@@ -371,6 +362,13 @@ export const webhookHandler = {
       .then ((response) => response.body)
       .catch ((err) => console.log ({status: err.status}))
     }
+  },
+
+  getIssueFromIssueOrId: async (service, issueOrId: string | Issue): Issue => {
+    if (typeof issueOrId === "string")
+      return await webhookHandler.getIssue (service, issueOrId)
+
+    return issueOrId
   },
 
   getComment: async (sourceService: string, reqBody: Object): IssueComment => {
