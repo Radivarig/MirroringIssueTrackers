@@ -50,7 +50,7 @@ export const webhookHandler = {
 
     // iterate keys
     issueAndComments.map (async (m) => {
-      console.log ("AAA", m)
+      console.log ("initial mapping", m)
       const {issue, comments} = m
       await webhookHandler.doMirror (issue.service, issue, comments)
     })
@@ -149,8 +149,15 @@ export const webhookHandler = {
     }
   },
 
-  doMirror: async (sourceService: string, issueOrId: string | Entity, comments: Array<IssueComment> | void) => {
-    const sourceEntity: Entity = await webhookHandler.getIssueFromIssueOrId (sourceService, issueOrId)
+  getEntityFromEntityOrId: async (sourceService: string, entityOrId: Entity | string) => {
+    if (typeof entityOrId === "string" || !webhookHandler.getIsComment (entityOrId)) {
+      return await webhookHandler.getIssue (sourceService, entityOrId.id || entityOrId)
+    }
+    return await webhookHandler.getComment (sourceService, entityOrId)
+  },
+
+  doMirror: async (sourceService: string, entityOrId: string | Entity, comments: Array<IssueComment> | void) => {
+    const sourceEntity: Entity = await webhookHandler.getEntityFromEntityOrId (sourceService, entityOrId)
 
     webhookHandler.addIdToMapping (sourceEntity)
 
@@ -218,7 +225,7 @@ export const webhookHandler = {
 
     if (["opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string = webhookHandler.getIssueIdFromRequestBody(service, rb)
-      console.log ("AAA", service, issueId)
+      console.log ("on changes", service, issueId)
       await webhookHandler.doMirror (service, issueId)
     }
 
@@ -397,12 +404,6 @@ export const webhookHandler = {
       .then ((response) => response.body)
       .catch ((err) => console.log ({status: err.status}))
     }
-  },
-
-  getIssueFromIssueOrId: async (service, issueOrId: string | Issue): Issue => {
-    if (typeof issueOrId === "string")
-      return await webhookHandler.getIssue (service, issueOrId)
-    return issueOrId
   },
 
   getComments: async (sourceService: string, sourceIssueId: string): Array<IssueComment> => {
