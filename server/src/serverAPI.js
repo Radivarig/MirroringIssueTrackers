@@ -53,6 +53,7 @@ export const webhookHandler = {
       for (let i = 0; i < issuesObj[service].length; ++i) {
         const issue = issuesObj[service][i]
         // sync
+
         await webhookHandler.doMirror(service, issue, comments)
       }
     }
@@ -122,28 +123,28 @@ export const webhookHandler = {
   getIsOriginal: (issueOrComment: Issue | IssueComment): boolean =>
     issueOrComment.body.indexOf (mirrorMetaVarName) === -1,
 
-  addIdToMapping: (issueOrComment: Issue | IssueComment, isComment: boolean = false) => {
+  addIdToMapping: (entity: Issue | IssueComment) => {
     // todo, babel typeof..
-    const mappings = isComment ? store.commentMappings : store.issueMappings
+    const mappings = webhookHandler.getIsComment (entity) ? store.commentMappings : store.issueMappings
 
-    if (webhookHandler.getIsOriginal (issueOrComment)) {
+    if (webhookHandler.getIsOriginal (entity)) {
       mappings.add ({
-        newKey: issueOrComment.service,
-        newValue: issueOrComment.id,
+        newKey: entity.service,
+        newValue: entity.id,
         assign: {
-          original: issueOrComment.service,
+          original: entity.service,
         },
       })
     }
     else {
-      const meta = webhookHandler.getMeta (issueOrComment)
+      const meta = webhookHandler.getMeta (entity)
 
       // create mapping to original
       mappings.add ({
         knownKey: meta.service,
         knownValue: meta.id,
-        newKey: issueOrComment.service,
-        newValue: issueOrComment.id,
+        newKey: entity.service,
+        newValue: entity.id,
         assign: {
           original: meta.service,
         },

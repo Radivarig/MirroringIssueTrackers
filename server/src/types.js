@@ -12,3 +12,4 @@ export type IssueComment = {
   service: string;
   issueId: string;
 }
+export type Entity = Issue | IssueComment
