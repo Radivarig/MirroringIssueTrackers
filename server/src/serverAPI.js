@@ -220,6 +220,12 @@ export const webhookHandler = {
 
   },
 
+  getIsComment: (entity: Issue | IssueComment): boolean => {
+    try {const comment: IssueComment = entity}
+    catch (err) {return false}
+    return true
+  },
+
   deleteComment: async (sourceService, reqBody: Object) => {
     if (sourceService === "github") {
       const targetService = "youtrack"
