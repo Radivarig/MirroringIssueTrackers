@@ -101,7 +101,7 @@ export const webhookHandler = {
   },
 
   getEntityService: (knownEntityService: EntityService, targetService: string): EntityService | void => {
-    const mappings = knownEntityService.issueService && knownEntityService.issueId ?
+    const mappings = knownEntityService.issueId ?
       store.commentMappings : store.issueMappings
     return mappings.getEntityService (knownEntityService, targetService)
   },
@@ -113,8 +113,8 @@ export const webhookHandler = {
     if (!targetEntityService)
       return
 
-    if (targetEntityService.issueId && targetEntityService.issueService)
-      return await webhookHandler.getComment (targetEntityService, targetService)
+    if (targetEntityService.issueId)
+      return await webhookHandler.getComment (targetEntityService)
 
     return await webhookHandler.getIssue (targetEntityService.service, targetEntityService.id)
   },
@@ -149,11 +149,16 @@ export const webhookHandler = {
     }
   },
 
-  getEntityFromEntityOrId: async (sourceService: string, entityOrId: Entity | string) => {
+  getEntityFromEntityOrId: async (targetService: string, entityOrId: Entity | string) => {
     if (typeof entityOrId === "string" || !webhookHandler.getIsComment (entityOrId)) {
-      return await webhookHandler.getIssue (sourceService, entityOrId.id || entityOrId)
+      return await webhookHandler.getIssue (targetService, entityOrId.id || entityOrId)
     }
-    return await webhookHandler.getComment (sourceService, entityOrId)
+    const knownEntityService: EntityService = {
+      service: entityOrId.service,
+      id: entityOrId.id,
+      issueId: entityOrId.issueId,
+    }
+    return await webhookHandler.getComment (knownEntityService)
   },
 
   doMirror: async (sourceService: string, entityOrId: string | Entity, comments: Array<IssueComment> | void) => {
@@ -178,7 +183,12 @@ export const webhookHandler = {
       if (targetEntity === undefined) {
         // if original, create target mirror
         if (webhookHandler.getIsOriginal (sourceEntity)) {
-          await webhookHandler.createMirror (sourceEntity)
+
+          if (webhookHandler.getIsComment (sourceEntity)) {
+            console.log ("create comment TODO ", sourceEntity)
+          }
+          // this does not sync comments, comments are synced bellow
+          else await webhookHandler.createMirror (sourceEntity)
           console.log (1, "creating mirror for", sourceEntity.id)
         }
         else {
@@ -192,19 +202,26 @@ export const webhookHandler = {
         if (webhookHandler.getIsOriginal (targetEntity)) {
           // todo, skip if there is no change, add flag synced
 
+          if (webhookHandler.getIsComment (targetEntity)) {
+            console.log ("update comment TODO", targetEntity)
+          }
           // this does not sync comments, comments are synced bellow
-          await webhookHandler.updateMirror (targetEntity)
+          else await webhookHandler.updateMirror (targetEntity)
 
           console.log (2, "is original", targetEntity.id) // this is triggered for originals, not mirrors
         }
 
         console.log (3, "after", targetEntity.id) // this is triggered for original and mirrors
-/*
-        if (!comments)
-          comments = await webhookHandler.getComments (targetEntity.service, targetEntity.id)
+        console.log (4, "after, comments", comments)
 
-        comments.forEach (async (comment) => await webhookHandler.doMirrorComment (comment.service, comment))
-*/
+        // if entity is Issue
+        if (webhookHandler.getIsComment (targetEntity) === false) {
+          if (!comments)
+            comments = await webhookHandler.getComments (targetEntity.service, targetEntity.id)
+
+          comments.forEach (async (comment) => await webhookHandler.doMirror (comment.service, comment))
+        }
+
         // loop comments of source
         // if sourceComment, update targetComments
         // if targetComment, update it with fetched sourceComment
@@ -223,7 +240,7 @@ export const webhookHandler = {
 
     const rb = req.body
 
-    if (["opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
+    if (["created", "opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string = webhookHandler.getIssueIdFromRequestBody(service, rb)
       console.log ("on changes", service, issueId)
       await webhookHandler.doMirror (service, issueId)
@@ -436,34 +453,35 @@ export const webhookHandler = {
 
   },
 
-  getComment: async (knownEntityService: EntityService, targetService: string): IssueComment => {/*
-    let rawComment
-
-    if (sourceService === "youtrack") {
-      const comments = await integrationRest ({
-        service: sourceService,
-        method: "get",
-        url: `issue/${reqBody.id}/comment/`,
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-      rawComment = comments.filter ((f) => f.id === reqBody.commentId)[0]
+  getComment: async (knownEntityService: EntityService): IssueComment => {
+    const restParams = {
+      method: "get",
+      service: knownEntityService.service,
     }
 
-    else if (sourceService === "github") {
-      rawComment = await integrationRest ({
-        service: sourceService,
-        method: "get",
-        url: `repos/${config.github.user}/${config.github.project}/issues/comments/${reqBody.comment.id}`,
-      })
-      .then ((response) => response.body)
-
+    switch (knownEntityService.service) {
+      case "youtrack":
+        restParams.url = `issue/${knownEntityService.issueId}/comment/`
+        break
+      case "github":
+        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/comments/${knownEntityService.id}`
+        break
     }
 
-    return webhookHandler.getFormatedComment (sourceService, rawComment)*/
+    let rawComment = await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
+
+    if(knownEntityService.service === "youtrack")
+      rawComment = rawComment.filter ((f) => f.id === knownEntityService.id)[0]
+
+    const a = webhookHandler.getFormatedComment (knownEntityService.service, rawComment, knownEntityService.issueId)
+    console.log ("GET COMMENT", knownEntityService, a)
+    return a
   },
 
   getFormatedComment: (service: string, rawComment: Object, issueId: string): IssueComment => {
+    console.log ({rawComment})
     const formatedComment = {
       id: rawComment.id.toString(),
       service,
