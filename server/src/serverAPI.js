@@ -183,12 +183,7 @@ export const webhookHandler = {
       if (targetEntity === undefined) {
         // if original, create target mirror
         if (webhookHandler.getIsOriginal (sourceEntity)) {
-
-          if (webhookHandler.getIsComment (sourceEntity)) {
-            console.log ("create comment TODO ", sourceEntity)
-          }
-          // this does not sync comments, comments are synced bellow
-          else await webhookHandler.createMirror (sourceEntity)
+          await webhookHandler.createMirror (sourceEntity)
           console.log (1, "creating mirror for", sourceEntity.id)
         }
         else {
@@ -211,23 +206,17 @@ export const webhookHandler = {
           console.log (2, "is original", targetEntity.id) // this is triggered for originals, not mirrors
         }
 
-        console.log (3, "after", targetEntity.id) // this is triggered for original and mirrors
-        console.log (4, "after, comments", comments)
+        console.log (3, "after", targetEntity.id, comments) // this is triggered for original and mirrors
 
-        // if entity is Issue
+        // if entity is issue, sync comments
         if (webhookHandler.getIsComment (targetEntity) === false) {
           if (!comments)
             comments = await webhookHandler.getComments (targetEntity.service, targetEntity.id)
 
-          comments.forEach (async (comment) => await webhookHandler.doMirror (comment.service, comment))
+          await Promise.all (comments.map (
+            async (comment) => await webhookHandler.doMirror (comment.service, comment)))
         }
-
-        // loop comments of source
-        // if sourceComment, update targetComments
-        // if targetComment, update it with fetched sourceComment
-        // if no sourceComment for targetComment, delete targetComment
       }
-
     })
   },
 
@@ -379,7 +368,7 @@ export const webhookHandler = {
         knownValue: comment.id,
       })
 
-      const commentSignature = webhookHandler.getMirrorCommentSignature (sourceService, targetService, issue, comment)
+      const commentSignature = webhookHandler.getMirrorSignature (sourceService, targetService, issue, comment)
 
       return await integrationRest({
         service: targetService,
@@ -408,7 +397,7 @@ export const webhookHandler = {
         knownValue: comment.id,
       })
 
-      const commentSignature = webhookHandler.getMirrorCommentSignature (sourceService, targetService, issue, comment)
+      const commentSignature = webhookHandler.getMirrorSignature (sourceService, targetService, issue, comment)
 
       return await integrationRest ({
         service: targetService,
@@ -583,38 +572,20 @@ export const webhookHandler = {
       return JSON.parse(regexRE[1])
   },
 
-  getMirrorCommentSignature: (sourceService, targetService, issue: Issue, comment: IssueComment) => {
-    const commentMetaData = {
-      id: comment.id,
-      //project: issue.project,
+  getMirrorSignature: (sourceService, targetService, entity: Entity): string => {
+    const entityMetaData = {
+      id: entity.id,
       service: sourceService,
     }
 
-    const commentHtmlComment = webhookHandler.wrapStringToHtmlComment (
-      `${mirrorMetaVarName}=${JSON.stringify (commentMetaData)}`)
+    const entityHtmlComment = webhookHandler.wrapStringToHtmlComment (
+      `${mirrorMetaVarName}=${JSON.stringify (entityMetaData)}`)
 
     if (targetService === "github")
-      return commentHtmlComment
+      return entityHtmlComment
 
     if (targetService === "youtrack")
-      return `{html}${commentHtmlComment}{html}`
-  },
-
-  getMirrorSignature: (sourceService, targetService, issue: Issue) => {
-    const issueMetaData = {
-      id: issue.id,
-      // project: issue.project,
-      service: sourceService,
-    }
-
-    const issueHtmlComment = webhookHandler.wrapStringToHtmlComment (
-      `${mirrorMetaVarName}=${JSON.stringify (issueMetaData)}`)
-
-    if (targetService === "github")
-      return issueHtmlComment
-
-    if (targetService === "youtrack")
-      return `{html}${issueHtmlComment}{html}`
+      return `{html}${entityHtmlComment}{html}`
   },
 
   updateMirror: async (sourceIssue: Issue) => {
@@ -665,55 +636,52 @@ export const webhookHandler = {
 
   },
 
-  createMirrorComment: async (sourceService: string, issue: Issue, comment: IssueComment) => {
-    if (sourceService === "youtrack") {
-      const targetService = "github"
+  createMirrorComment: async (comment: IssueComment) => {
+    await Promise.all (services.map (async (targetService) => {
+      if (targetService === comment.service)
+        return
 
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: issue.id,
-      })
+      const knownIssueService: EntityService = {
+        service: comment.service,
+        id: comment.issueId,
+      }
+      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
 
-      const commentSignature: string = webhookHandler.getMirrorCommentSignature (sourceService, targetService, issue, comment)
+      const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
 
-      return await integrationRest({
+      const restParams = {
         service: targetService,
         method: "post",
-        url: `repos/${config.github.user}/${config.github.project}/issues/${mirrorId}/comments`,
-        data: {
-          body: `${comment.body}\n\n${commentSignature}`,
-        },
-      })
+      }
+
+      switch (targetService) {
+        case "youtrack":
+          restParams.url = `issue/${targetIssueService.id}/execute`
+          restParams.query = {
+            comment: `${comment.body}\n\n${signature}`,
+          }
+          break
+        case "github":
+          restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${targetIssueService.id}/comments`
+          restParams.data = {
+            body: `${comment.body}\n\n${signature}`,
+          }
+          break
+      }
+
+      await integrationRest (restParams)
       .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
-
-    if (sourceService === "github") {
-      const targetService = "youtrack"
-
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: issue.id,
-      })
-
-      const commentSignature: string = webhookHandler.getMirrorCommentSignature (sourceService, targetService, issue, comment)
-      return await integrationRest ({
-        service: targetService,
-        method: "post",
-        url: `issue/${mirrorId}/execute`,
-        query: {
-          // todo: append mirror signature
-          comment: `${comment.body}\n\n${commentSignature}`,
-        },
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
+      .catch ((err) => {throw err})
+    }))
   },
 
-  createMirror: async (sourceIssue: Issue) => {
+  createMirror: async (entity: Entity) => {
+    if (webhookHandler.getIsComment (entity))
+      return await webhookHandler.createMirrorComment (entity)
+    return await webhookHandler.createMirrorIssue (entity)
+  },
+
+  createMirrorIssue: async (sourceIssue: Issue) => {
     services.forEach (async (targetService) => {
       if (targetService === sourceIssue.service)
         return
