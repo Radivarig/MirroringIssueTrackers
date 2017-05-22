@@ -6,12 +6,12 @@ import {
 export class Mapping {
   mappings = []
 
-  getEntityService (targetService: string, knownEntityService: EntityService) {
+  getEntityService (knownEntityService: EntityService, targetService: string) {
     for (let i = 0; i < this.mappings.length; ++i) {
       const mapping: EntityMapping = this.mappings[i]
 
       for (let j = 0; j < mapping.services.length; ++j) {
-        const entityService: EntityService = mapping[j]
+        const entityService: EntityService = mapping.services[j]
 
         // if we found known EntityService, return targetService
         if (entityService.service === knownEntityService.service &&
