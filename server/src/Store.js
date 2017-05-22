@@ -35,8 +35,18 @@ export class Mapping {
     for (let i = 0; i < this.mappings.length; ++i) {
       const mapping: EntityMapping = this.mappings[i]
 
-      const knownMatch = knownService && mapping.services.filter (
-        (f) => f.service === knownService.service && f.id === knownService.id)[0]
+      const alreadyExists = mapping.services.filter ((f) =>
+        f.service === newEntityService.service && f.id === newEntityService.id
+      )[0]
+
+      if (alreadyExists) {
+        Object.assign (mapping, assignToMapping)
+        return
+      }
+
+      const knownMatch = knownService && mapping.services.filter ((f) =>
+        f.service === knownService.service && f.id === knownService.id
+      )[0]
 
       if (knownMatch) {
         // assign
