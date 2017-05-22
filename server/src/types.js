@@ -18,7 +18,6 @@ export type EntityService = {
   service: string,
   id: string,
   // this is for comment parent
-  issueService: string | void;
   issueId: string | void;
 }
 export type EntityMapping = {
