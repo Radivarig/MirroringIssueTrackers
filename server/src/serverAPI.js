@@ -45,7 +45,7 @@ export const webhookHandler = {
       }))
     }))
 
-    // console.log ({issueAndComments})
+    console.log ({issueAndComments})
 
     /*
     // iterate keys
@@ -169,6 +169,7 @@ export const webhookHandler = {
         // if original, create target mirror
         if (webhookHandler.getIsOriginal (sourceIssue)) {
           await webhookHandler.createMirror (sourceIssue)
+          console.log (1, "creating mirror for", sourceIssue.id)
         }
         else {
           // todo delete
@@ -181,15 +182,19 @@ export const webhookHandler = {
         if (webhookHandler.getIsOriginal (targetIssue)) {
           // todo, skip if there is no change, add flag synced
 
-          // this does not sync comments, see below
+          // this does not sync comments, comments are synced bellow
           await webhookHandler.updateMirror (targetIssue)
 
-          if (!comments)
-            comments = await webhookHandler.getComments (targetIssue.service, targetIssue.id)
-
-          console.log (targetIssue.id, {comments})
+          console.log (2, "is original", targetIssue.id) // this is triggered for originals, not mirrors
         }
 
+        console.log (3, "after", targetIssue.id) // this is triggered for original and mirrors
+/*
+        if (!comments)
+          comments = await webhookHandler.getComments (targetIssue.service, targetIssue.id)
+
+        comments.forEach (async (comment) => await webhookHandler.doMirrorComment (comment.service, comment))
+*/
         // loop comments of source
         // if sourceComment, update targetComments
         // if targetComment, update it with fetched sourceComment
@@ -387,13 +392,12 @@ export const webhookHandler = {
   getIssueFromIssueOrId: async (service, issueOrId: string | Issue): Issue => {
     if (typeof issueOrId === "string")
       return await webhookHandler.getIssue (service, issueOrId)
-
     return issueOrId
   },
 
   getComments: async (sourceService: string, sourceIssueId: string): Array<IssueComment> => {
-    const comments = await webhookHandler.getRawComments (sourceService, sourceIssueId)
-    return comments.map ((comment) => webhookHandler.getFormatedComment (sourceService, comment))
+    const rawComments = await webhookHandler.getRawComments (sourceService, sourceIssueId)
+    return rawComments.map ((rawComment) => webhookHandler.getFormatedComment (sourceService, rawComment, sourceIssueId))
   },
 
   getRawComments: async (sourceService: string, sourceIssueId: string): Array<Object> => {
@@ -420,7 +424,7 @@ export const webhookHandler = {
     return comments
 
   },
-
+/*
   getComment: async (sourceService: string, reqBody: Object): IssueComment => {
     let rawComment
 
@@ -445,25 +449,20 @@ export const webhookHandler = {
 
     }
 
-    return webhookHandler.getFormatedComment (sourceService, rawComment)
+    return webhookHandler.getFormatedComment (sourceService, rawComment, )
   },
-
-  getFormatedComment: (service: string, rawComment: Object): IssueComment => {
-    if (service === "youtrack") {
-      return {
-        id: rawComment.id.toString(),
-        body: rawComment.text,
-        service,
-      }
+*/
+  getFormatedComment: (service: string, rawComment: Object, issueId: string): IssueComment => {
+    const formatedComment = {
+      id: rawComment.id.toString(),
+      service,
+      issueId,
     }
-
-    if (service === "github") {
-      return {
-        id: rawComment.id.toString(),
-        body: rawComment.body,
-        service,
-      }
+    switch (service) {
+      case "youtrack": formatedComment.body = rawComment.text; break
+      case "github": formatedComment.body = rawComment.body; break
     }
+    return formatedComment
   },
 
   getIssue: async (sourceService: string, issueId: string): Issue | void => {

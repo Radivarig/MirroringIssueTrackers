@@ -10,4 +10,5 @@ export type IssueComment = {
   id: string;
   body: string;
   service: string;
+  issueId: string;
 }
