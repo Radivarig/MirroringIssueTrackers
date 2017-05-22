@@ -25,29 +25,38 @@ const services = ["github", "youtrack"]
 
 export const webhookHandler = {
   doInitialMapping: async () => {
-    const issuesObj = {}
 
-    for (let i = 0; i < services.length; ++i) {
-      const service = services[i]
-      issuesObj[service] = await webhookHandler.getProjectIssues (service)
+    const issueAndComments: Array<{issue: Issue, comments: Array<IssueComment>}> = []
 
-      // recreate id mappings
-      for (let j = 0; j < issuesObj[service].length; ++j) {
-        const issue = issuesObj[service][j]
+    await Promise.all (services.map (async (service) => {
+      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
 
-        webhookHandler.addIssueIdToMapping (issue)
-      }
-    }
+      await Promise.all (projectIssues.map (async (issue) => {
+        webhookHandler.addIdToMapping (issue)
 
+        const comments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
+        comments.forEach (
+          (comment) => webhookHandler.addIdToMapping (comment, true))
+
+        issueAndComments.push ({
+          issue,
+          comments,
+        })
+      }))
+    }))
+
+    // console.log ({issueAndComments})
+
+    /*
     // iterate keys
     for (const service in issuesObj) {
       for (let i = 0; i < issuesObj[service].length; ++i) {
         const issue = issuesObj[service][i]
         // sync
-        await webhookHandler.doMirror(service, issue)
+        await webhookHandler.doMirror(service, issue, comments)
       }
     }
-
+    */
   },
 
   getProjectIssues: async (sourceService: string) => {
@@ -75,8 +84,7 @@ export const webhookHandler = {
     const issues = []
     for (let i = 0; i < rawIssues.length; ++i) {
       const rawIssue = rawIssues[i]
-      const issue = await webhookHandler.getFormatedIssue (sourceService, rawIssue)
-      issues.push (issue)
+      issues.push (webhookHandler.getFormatedIssue (sourceService, rawIssue))
     }
     return issues
   },
@@ -86,10 +94,13 @@ export const webhookHandler = {
   },
 
   getIssueIdFromRequestBody: (sourceService: string, reqBody: Object): string => {
-    if (sourceService === "youtrack")
-      return reqBody.issueId.toString ()
-    if (sourceService === "github")
-      return reqBody.issue.number.toString ()
+    if (sourceService === "youtrack") return reqBody.issueId.toString ()
+    if (sourceService === "github") return reqBody.issue.number.toString ()
+  },
+
+  getIdFromRawIssue: (sourceService: string, rawIssues: Object): string => {
+    if (sourceService === "youtrack") return rawIssues.id.toString ()
+    if (sourceService === "github") return rawIssues.number.toString ()
   },
 
   getTargetId: (sourceService: string, sourceId: string, targetService: string): string | void =>
@@ -108,38 +119,42 @@ export const webhookHandler = {
     return await webhookHandler.getIssue (targetService, targetId)
   },
 
-  getIsIssueOriginal: (issue: Issue): boolean => issue.body.indexOf (mirrorMetaVarName) === -1,
+  getIsOriginal: (issueOrComment: Issue | IssueComment): boolean =>
+    issueOrComment.body.indexOf (mirrorMetaVarName) === -1,
 
-  addIssueIdToMapping: (issue: Issue) => {
-    if (webhookHandler.getIsIssueOriginal (issue)) {
-      store.issueMappings.add ({
-        newKey: issue.service,
-        newValue: issue.id,
+  addIdToMapping: (issueOrComment: Issue | IssueComment, isComment: boolean = false) => {
+    // todo, babel typeof..
+    const mappings = isComment ? store.commentMappings : store.issueMappings
+
+    if (webhookHandler.getIsOriginal (issueOrComment)) {
+      mappings.add ({
+        newKey: issueOrComment.service,
+        newValue: issueOrComment.id,
         assign: {
-          original: issue.service,
+          original: issueOrComment.service,
         },
       })
     }
     else {
-      const issueMeta = webhookHandler.getIssueMeta (issue)
+      const meta = webhookHandler.getMeta (issueOrComment)
 
       // create mapping to original
-      store.issueMappings.add ({
-        knownKey: issueMeta.service,
-        knownValue: issueMeta.id,
-        newKey: issue.service,
-        newValue: issue.id,
+      mappings.add ({
+        knownKey: meta.service,
+        knownValue: meta.id,
+        newKey: issueOrComment.service,
+        newValue: issueOrComment.id,
         assign: {
-          original: issueMeta.service,
+          original: meta.service,
         },
       })
     }
   },
 
-  doMirror: async (sourceService: string, issueOrId: string | Issue) => {
+  doMirror: async (sourceService: string, issueOrId: string | Issue, comments: Array<IssueComment> | void) => {
     const sourceIssue: Issue = await webhookHandler.getIssueFromIssueOrId (sourceService, issueOrId)
 
-    webhookHandler.addIssueIdToMapping (sourceIssue)
+    webhookHandler.addIdToMapping (sourceIssue)
 
     services.forEach (async (targetService) => {
       let targetIssue
@@ -152,7 +167,7 @@ export const webhookHandler = {
       // if no target
       if (targetIssue === undefined) {
         // if original, create target mirror
-        if (webhookHandler.getIsIssueOriginal(sourceIssue)) {
+        if (webhookHandler.getIsOriginal (sourceIssue)) {
           await webhookHandler.createMirror (sourceIssue)
         }
         else {
@@ -163,15 +178,16 @@ export const webhookHandler = {
       }
       // if target is found
       else {
-        if (webhookHandler.getIsIssueOriginal (targetIssue)) {
+        if (webhookHandler.getIsOriginal (targetIssue)) {
           // todo, skip if there is no change, add flag synced
 
           // this does not sync comments, see below
           await webhookHandler.updateMirror (targetIssue)
 
-          const comments = await webhookHandler.getComments (targetIssue)
+          if (!comments)
+            comments = await webhookHandler.getComments (targetIssue.service, targetIssue.id)
 
-          console.log ({comments})
+          console.log (targetIssue.id, {comments})
         }
 
         // loop comments of source
@@ -375,29 +391,34 @@ export const webhookHandler = {
     return issueOrId
   },
 
-  getComments: async (sourceIssue: Issue): Array<IssueComment> => {
+  getComments: async (sourceService: string, sourceIssueId: string): Array<IssueComment> => {
+    const comments = await webhookHandler.getRawComments (sourceService, sourceIssueId)
+    return comments.map ((comment) => webhookHandler.getFormatedComment (sourceService, comment))
+  },
+
+  getRawComments: async (sourceService: string, sourceIssueId: string): Array<Object> => {
     const restParams = {
       method: "get",
-      service: sourceIssue.service,
+      service: sourceService,
     }
 
-    switch (sourceIssue.service) {
+    switch (sourceService) {
       case "youtrack": {
-        restParams.url = `issue/${sourceIssue.id}/comment`
+        restParams.url = `issue/${sourceIssueId}/comment`
         break
       }
       case "github": {
-        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${sourceIssue.id}/comments`
+        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${sourceIssueId}/comments`
         break
       }
     }
 
-    const rawComments = await integrationRest (restParams)
+    const comments = await integrationRest (restParams)
     .then ((response) => response.body)
     .catch ((err) => {throw err})
 
-    return rawComments.map (((rawComment) =>
-      webhookHandler.getFormatedComment (sourceIssue.service, rawComment)))
+    return comments
+
   },
 
   getComment: async (sourceService: string, reqBody: Object): IssueComment => {
@@ -427,7 +448,7 @@ export const webhookHandler = {
     return webhookHandler.getFormatedComment (sourceService, rawComment)
   },
 
-  getFormatedComment: (service: string, rawComment: Object) => {
+  getFormatedComment: (service: string, rawComment: Object): IssueComment => {
     if (service === "youtrack") {
       return {
         id: rawComment.id.toString(),
@@ -469,7 +490,10 @@ export const webhookHandler = {
         throw err
     })
 
-    return rawIssue && webhookHandler.getFormatedIssue (sourceService, rawIssue)
+    if (!rawIssue)
+      return
+
+    return webhookHandler.getFormatedIssue (sourceService, rawIssue)
   },
 
   getLabelsFromFields: (fields/*: Array<{name: string, value: string}>*/): Array<string> =>
@@ -478,51 +502,55 @@ export const webhookHandler = {
        `${field.name}:${field.value}`),
 
   getFormatedIssue: (service: string, rawIssue: Object): Issue => {
-    if (service === "github") {
-      // TODO labels, how to display them on youtrack if source is github,
-      // should fields be permitted to change from github if source is youtrack?
+    const issueId: string = webhookHandler.getIdFromRawIssue (service, rawIssue)
 
-      return {
-        id: rawIssue.number.toString(),
-        title: rawIssue.title,
-        body: rawIssue.body,
-        service,
-        labels: [],
+    switch (service) {
+      case "github": {
+        // TODO labels, how to display them on youtrack if source is github,
+        // should fields be permitted to change from github if source is youtrack?
+
+        return {
+          service,
+          id: rawIssue.number.toString(),
+          title: rawIssue.title,
+          body: rawIssue.body,
+          labels: [],
+        }
       }
-    }
-    if (service === "youtrack") {
-      let title = ""
-      let body = ""
-      const fields = []
+      case "youtrack": {
+        let title = ""
+        let body = ""
+        const fields = []
 
-      rawIssue.field.forEach ((f) => {
-        if (f.name === "summary")
-          title = f.value
-        else if (f.name === "description")
-          body = f.value
-        else if (fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
-          fields.push (f)
-      })
+        rawIssue.field.forEach ((f) => {
+          if (f.name === "summary")
+            title = f.value
+          else if (f.name === "description")
+            body = f.value
+          else if (fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
+            fields.push (f)
+        })
 
-      const labels = ["Mirror:Youtrack"].concat (webhookHandler.getLabelsFromFields (fields))
+        const labels = ["Mirror:Youtrack"].concat (webhookHandler.getLabelsFromFields (fields))
 
-      return {
-        id: rawIssue.id,
-        title,
-        body,
-        service,
-        labels,
+        return {
+          service,
+          id: rawIssue.id,
+          title,
+          body,
+          labels,
+        }
       }
     }
   },
 
   wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
 
-  getIssueMeta: (issue: Issue): Object | void => {
+  getMeta: (issueOrComment: Issue | IssueComment): Object | void => {
     const varStart = `<!--${mirrorMetaVarName}=`
     const varEnd = "-->"
     const regexStr = `${varStart}(.*)${varEnd}`
-    const regexRE = issue.body.match(new RegExp(regexStr))
+    const regexRE = issueOrComment.body.match(new RegExp(regexStr))
     if (regexRE && regexRE.length > 1)
       return JSON.parse(regexRE[1])
   },
