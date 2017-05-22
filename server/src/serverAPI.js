@@ -1,6 +1,8 @@
 import type {
   Issue,
   IssueComment,
+  EntityService,
+  EntityMapping,
 } from './types'
 
 import integrationRest from "./integrationRest"
@@ -105,7 +107,7 @@ export const webhookHandler = {
   },
 
   getTargetId: (sourceService: string, sourceId: string, targetService: string): string | void =>
-    store.issueMappings.getValueByKeyAndKnownKeyValue ({
+    store.issueMappings.getEntityService ({
       key: targetService,
       knownKey: sourceService,
       knownValue: sourceId,
@@ -128,27 +130,25 @@ export const webhookHandler = {
     const mappings = webhookHandler.getIsComment (entity) ? store.commentMappings : store.issueMappings
 
     if (webhookHandler.getIsOriginal (entity)) {
-      mappings.add ({
-        newKey: entity.service,
-        newValue: entity.id,
-        assign: {
-          original: entity.service,
-        },
-      })
+      const newEntityService: EntityService = {
+        service: entity.service,
+        id: entity.id,
+      }
+      mappings.add (newEntityService, undefined, {originalService: entity.service})
     }
     else {
       const meta = webhookHandler.getMeta (entity)
 
+      const newEntityService: EntityService = {
+        service: entity.service,
+        id: entity.id,
+      }
+      const knownEntityService: EntityService = {
+        service: meta.service,
+        id: meta.id,
+      }
       // create mapping to original
-      mappings.add ({
-        knownKey: meta.service,
-        knownValue: meta.id,
-        newKey: entity.service,
-        newValue: entity.id,
-        assign: {
-          original: meta.service,
-        },
-      })
+      mappings.add (newEntityService, knownEntityService, {originalService: meta.service})
     }
   },
 

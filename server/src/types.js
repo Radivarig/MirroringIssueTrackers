@@ -13,3 +13,16 @@ export type IssueComment = {
   issueId: string;
 }
 export type Entity = Issue | IssueComment
+
+export type EntityService = {
+  service: string,
+  id: string,
+  // this is for comment parent
+  issueService: string | void;
+  issueId: string | void;
+}
+export type EntityMapping = {
+  flag: string | void;
+  originalService: string | void;
+  services: Array<EntityService>;
+}

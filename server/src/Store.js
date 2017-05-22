@@ -1,15 +1,27 @@
+import {
+  EntityService,
+  EntityMapping,
+} from "./types"
+
 export class Mapping {
   mappings = []
 
-  getValueByKeyAndKnownKeyValue (opts) {
-    const key: string = opts.key
-    const knownKey: string = opts.knownKey
-    const {knownValue} = opts
+  getEntityService (targetService: string, knownEntityService: EntityService) {
+    for (let i = 0; i < this.mappings.length; ++i) {
+      const mapping: EntityMapping = this.mappings[i]
 
-    const match = this.mappings.filter ((f) => f[knownKey] === knownValue)[0]
-    return match && match[key]
+      for (let j = 0; j < mapping.services.length; ++j) {
+        const entityService: EntityService = mapping[j]
+
+        // if we found known EntityService, return targetService
+        if (entityService.service === knownEntityService.service &&
+          entityService.id === knownEntityService.id)
+          return mapping.services.filter ((f) => f.service === targetService)[0]
+      }
+    }
   }
 
+/*
   remove (opts) {
     const knownKey: string = opts.knownKey
     const {knownValue} = opts
@@ -17,38 +29,36 @@ export class Mapping {
     // remove known mapping
     this.mappings = this.mappings.filter ((m) => m[knownKey] !== knownValue)
   }
+*/
 
-  add (opts) {
-    const knownKey: string | void = opts.knownKey
-    const newKey: string = opts.newKey
-    const {knownValue, newValue} = opts
-    const assign: Object = opts.assign || {}
+  add (newEntityService: EntityService, knownService: EntityService | void, assignToMapping: Object = {}) {
+    for (let i = 0; i < this.mappings.length; ++i) {
+      const mapping: EntityMapping = this.mappings[i]
 
-    // iterate array
-    for (const mapping of this.mappings) { // eslint-disable-line no-shadow
-      // iterate keys
-      for (const key in mapping) {
-        // if known key-value match
-        if (knownKey && key === knownKey && mapping[knownKey] === knownValue) {
-          mapping[newKey] = newValue
-          Object.assign (mapping, assign)
-          return
-        }
+      const knownMatch = knownService && mapping.services.filter (
+        (f) => f.service === knownService.service && f.id === knownService.id)[0]
 
-        // return if new key already exists
-        if (key === newKey && mapping[newKey] === newValue)
-          return
-
+      if (knownMatch) {
+        // assign
+        Object.assign (mapping, assignToMapping)
+        // append service
+        mapping.services.push (newEntityService)
+        return
       }
     }
-    // adding first time
-    const mapping = {}
-    if (knownKey)
-      mapping[knownKey] = knownValue
-    mapping[newKey] = newValue
-    Object.assign (mapping, assign)
+    // create new mapping
+    const newEntityMapping: EntityMapping = {services: []}
 
-    this.mappings.push (mapping)
+    // fill services
+    if (knownService)
+      newEntityMapping.services.push (knownService)
+    newEntityMapping.services.push (newEntityService)
+
+    // assign
+    Object.assign (newEntityMapping, assignToMapping)
+    // create mapping
+    this.mappings.push (newEntityMapping)
+
   }
 
 }
