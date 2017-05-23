@@ -38,8 +38,7 @@ export const webhookHandler = {
         webhookHandler.addIdToMapping (issue)
 
         const comments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
-        comments.forEach (
-          (comment) => webhookHandler.addIdToMapping (comment, true))
+        await Promise.all (comments.map (async (comment) => webhookHandler.addIdToMapping (comment)))
 
         issueAndComments.push ({
           issue,
@@ -50,8 +49,8 @@ export const webhookHandler = {
 
     // iterate keys
     issueAndComments.map (async (m) => {
-      console.log ("initial mapping", m)
       const {issue, comments} = m
+      console.log ("initial mapping", issue.id, comments && comments.map ((mm) => mm.id))
       await webhookHandler.doMirror (issue.service, issue, comments)
     })
   },
@@ -122,24 +121,21 @@ export const webhookHandler = {
   getIsOriginal: (issueOrComment: Issue | IssueComment): boolean =>
     issueOrComment.body.indexOf (mirrorMetaVarName) === -1,
 
-  addIdToMapping: (entity: Issue | IssueComment) => {
+  addIdToMapping: (entity: Entity) => {
     // todo, babel typeof..
     const mappings = webhookHandler.getIsComment (entity) ? store.commentMappings : store.issueMappings
 
+    const newEntityService: EntityService = {
+      service: entity.service,
+      id: entity.id,
+      issueId: entity.issueId,
+    }
     if (webhookHandler.getIsOriginal (entity)) {
-      const newEntityService: EntityService = {
-        service: entity.service,
-        id: entity.id,
-      }
       mappings.add (newEntityService, undefined, {originalService: entity.service})
     }
     else {
       const meta = webhookHandler.getMeta (entity)
 
-      const newEntityService: EntityService = {
-        service: entity.service,
-        id: entity.id,
-      }
       const knownEntityService: EntityService = {
         service: meta.service,
         id: meta.id,
@@ -166,17 +162,22 @@ export const webhookHandler = {
 
     webhookHandler.addIdToMapping (sourceEntity)
 
-    services.forEach (async (targetService) => {
+    await Promise.all (services.map (async (targetService) => {
       let targetEntity
 
-      if (targetService === sourceService)
+      if (targetService === sourceService) {
         targetEntity = sourceEntity
+      }
       else {
         const knownEntityService: EntityService = {
           service: sourceEntity.service,
           id: sourceEntity.id,
+          issueId: sourceEntity.issueId,
         }
         targetEntity = await webhookHandler.getTargetEntity (knownEntityService, targetService)
+
+        if (!targetEntity)
+          console.log ("no target entity for", knownEntityService, targetService)
       }
 
       // if no target
@@ -192,32 +193,31 @@ export const webhookHandler = {
           console.log (`Entity is a mirror without original: ${sourceService}, ${sourceEntity.id}`)
         }
       }
-      // if target is found
-      else {
-        if (webhookHandler.getIsOriginal (targetEntity)) {
+      // if target
+      else if (webhookHandler.getIsOriginal (targetEntity)) {
           // todo, skip if there is no change, add flag synced
 
+        if (targetService !== sourceService) {
+          console.log ("updating mirror", targetEntity.id)
           if (webhookHandler.getIsComment (targetEntity)) {
             console.log ("update comment TODO", targetEntity)
           }
-          // this does not sync comments, comments are synced bellow
+            // this does not sync comments, comments are synced bellow
           else await webhookHandler.updateMirror (targetEntity)
-
-          console.log (2, "is original", targetEntity.id) // this is triggered for originals, not mirrors
-        }
-
-        console.log (3, "after", targetEntity.id, comments) // this is triggered for original and mirrors
-
-        // if entity is issue, sync comments
-        if (webhookHandler.getIsComment (targetEntity) === false) {
-          if (!comments)
-            comments = await webhookHandler.getComments (targetEntity.service, targetEntity.id)
-
-          await Promise.all (comments.map (
-            async (comment) => await webhookHandler.doMirror (comment.service, comment)))
         }
       }
-    })
+    }))
+
+    // if entity is issue, sync comments
+    if (webhookHandler.getIsComment (sourceEntity) === false) {
+
+      if (!comments)
+        comments = await webhookHandler.getComments (sourceEntity.service, sourceEntity.id)
+
+      await Promise.all (comments.map (
+        async (comment) => await webhookHandler.doMirror (comment.service, comment)))
+    }
+
   },
 
   handleRequest: async (service, req, res) => {
@@ -464,13 +464,10 @@ export const webhookHandler = {
     if(knownEntityService.service === "youtrack")
       rawComment = rawComment.filter ((f) => f.id === knownEntityService.id)[0]
 
-    const a = webhookHandler.getFormatedComment (knownEntityService.service, rawComment, knownEntityService.issueId)
-    console.log ("GET COMMENT", knownEntityService, a)
-    return a
+    return webhookHandler.getFormatedComment (knownEntityService.service, rawComment, knownEntityService.issueId)
   },
 
   getFormatedComment: (service: string, rawComment: Object, issueId: string): IssueComment => {
-    console.log ({rawComment})
     const formatedComment = {
       id: rawComment.id.toString(),
       service,
