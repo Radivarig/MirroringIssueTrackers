@@ -160,6 +160,7 @@ export const webhookHandler = {
 
   doMirror: async (sourceService: string, entityOrId: string | Entity, comments: Array<IssueComment> | void) => {
     const sourceEntity: Entity = await webhookHandler.getEntityFromEntityOrId (sourceService, entityOrId)
+    console.log ("do mirror", sourceEntity.id, "comment", webhookHandler.getIsComment (sourceEntity))
 
     webhookHandler.addIdToMapping (sourceEntity)
 
@@ -195,11 +196,16 @@ export const webhookHandler = {
         }
       }
       // if target is original and not source
-      else if (targetService !== sourceService && webhookHandler.getIsOriginal (targetEntity)) {
+      else if (webhookHandler.getIsOriginal (targetEntity)) {
         // todo, skip if there is no change, add flag synced
 
         // this does not sync comments, comments are synced bellow
+        console.log ("update mirrors", targetEntity.service, targetEntity.id)
+
         await webhookHandler.updateMirror (targetEntity)
+      }
+      else {
+        console.log ("skip mirror", targetEntity.service, targetEntity.id)
       }
     }))
 
@@ -354,7 +360,6 @@ export const webhookHandler = {
   },
 
   updateMirrorComment: async (comment: IssueComment) => {
-    console.log ("updateMirrorComment", comment)
     await Promise.all (services.map (async (targetService) => {
       if (targetService === comment.service)
         return
