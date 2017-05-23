@@ -194,7 +194,7 @@ export const webhookHandler = {
         targetEntity = await webhookHandler.getTargetEntity (knownEntityService, targetService)
 
         if (!targetEntity)
-          console.log ("no target entity for", knownEntityService, targetService)
+          console.log (0, "no target entity for", knownEntityService, targetService)
       }
 
       // if no target
@@ -202,12 +202,12 @@ export const webhookHandler = {
         // if original, create target mirror
         if (webhookHandler.getIsOriginal (sourceEntity)) {
           await webhookHandler.createMirror (sourceEntity)
-          console.log (1, "creating mirror for", sourceEntity.id)
+          console.log (1, "created mirror for", sourceEntity.service, sourceEntity.id)
         }
         else {
-          // todo delete
           // todo add flag deleted
-          console.log (`Entity is a mirror without original: ${sourceService}, ${sourceEntity.id}`)
+          await webhookHandler.deleteEntity (sourceEntity)
+          console.log (-1, `Entity is a mirror without original, deleted: ${sourceService}, ${sourceEntity.id}`,"comment: ", webhookHandler.getIsComment (sourceEntity))
         }
       }
       // if target is original and not source
@@ -215,12 +215,12 @@ export const webhookHandler = {
         // todo, skip if there is no change, add flag synced
 
         // this does not sync comments, comments are synced bellow
-        console.log ("update mirrors", targetEntity.service, targetEntity.id)
+        console.log (2, "update mirrors", targetEntity.service, targetEntity.id)
 
         await webhookHandler.updateMirror (targetEntity)
       }
       else {
-        console.log ("skip mirror", targetEntity.service, targetEntity.id)
+        console.log (3, "skip mirror", targetEntity.service, targetEntity.id)
       }
     }))
 
@@ -262,113 +262,37 @@ export const webhookHandler = {
     return true
   },
 
-  deleteComment: async (sourceService, reqBody: Object) => {
-    if (sourceService === "github") {
-      const targetService = "youtrack"
+  deleteEntity: async (entity: Entity) => {
+    if (webhookHandler.getIsComment (entity))
+      await webhookHandler.deleteCommentInstance (entity)
+    else await webhookHandler.deleteIssueInstance (entity)
+  },
 
-      // todo, get these in a more clean way
-      const githubIssueId: string = reqBody.issue.number.toString ()
-      const githubCommentId: string = reqBody.comment.id.toString ()
+  deleteIssueInstance: async (issue: Issue) => {
+    console.log ("deletion of issue not implemented", issue.service, issue.id)
+  },
 
-      console.log ({githubIssueId, githubCommentId})
-
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: githubIssueId,
-      })
-
-      const mirrorCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: githubCommentId,
-      })
-
-      const r = await integrationRest ({
-        service: targetService,
-        method: "delete",
-        url: `issue/${mirrorId}/comment/${mirrorCommentId}`,
-        query: {
-          permanently: true,
-        },
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-
-      store.commentMappings.remove ({
-        knownKey: sourceService,
-        knownValue: githubCommentId,
-      })
-      store.commentMappings.remove ({
-        knownKey: targetService,
-        knownValue: mirrorCommentId,
-      })
-
+  deleteCommentInstance: async (comment: IssueComment) => {
+    const restParams = {
+      service: comment.service,
+      method: "delete",
+    }
+    switch (comment.service) {
+      case "youtrack":
+        restParams.url = `issue/${comment.issueId}/comment/${comment.id}`
+        restParams.query = {permanently: true}
+        break
+      case "github":
+        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/comments/${comment.id}`
+        break
     }
 
-    if (sourceService === "youtrack") {
-      const targetService = "github"
-      // bug in youtrack API, can't provide deleted comment id
-      // get all comments from original, deleted is stored mirror not in that list
+    console.log ("DELETING", restParams)
+    await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
 
-      // get youtrack comments
-      const youtrackComments = await integrationRest ({
-        service: sourceService,
-        method: "get",
-        url: `issue/${reqBody.id}/comment/`,
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-
-      const youtrackCommentIds = youtrackComments.map ((m) => m.id.toString ())
-
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: reqBody.id,
-      })
-
-      // get github comments
-      const githubComments = await integrationRest ({
-        service: targetService,
-        method: "get",
-        url: `repos/${config.github.user}/${config.github.project}/issues/${mirrorId}/comments`,
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-
-      const githubCommentIds = githubComments.map ((m) => m.id.toString ())
-
-      githubCommentIds.forEach (async (githubCommentId) => {
-        const youtrackCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
-          key: sourceService,
-          knownKey: targetService,
-          knownValue: githubCommentId,
-        })
-
-        if (youtrackCommentIds.indexOf(youtrackCommentId) === -1) {
-          const r = await integrationRest ({
-            service: targetService,
-            method: "delete",
-            url: `repos/${config.github.user}/${config.github.project}/issues/comments/${githubCommentId}`,
-          })
-          .then ((response) => response.body)
-          .catch ((err) => console.log ({status: err.status}))
-
-          store.commentMappings.remove ({
-            knownKey: sourceService,
-            knownValue: youtrackCommentId,
-          })
-          store.commentMappings.remove ({
-            knownKey: targetService,
-            knownValue: githubCommentId,
-          })
-
-        }
-
-      })
-
-    }
+      // remove from store: orig and mirrors
   },
 
   updateMirror: async (entity: Entity) => {
@@ -395,7 +319,7 @@ export const webhookHandler = {
       }
       const targetCommentService: EntityService | void = webhookHandler.getEntityService (knownCommentService, targetService)
 
-      console.log ({targetService, knownIssueService, targetIssueService, knownCommentService, targetCommentService})
+      // console.log ({targetService, knownIssueService, targetIssueService, knownCommentService, targetCommentService})
 
       if (!targetIssueService || ! targetCommentService)
         return
