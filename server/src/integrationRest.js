@@ -8,8 +8,8 @@ export default async (opts) => {
   const service: string = opts.service
   const method: string = opts.method && opts.method.toLowerCase()
   const url: string = opts.url
-  const query: Object = opts.query || {}
-  const data: Object = opts.data || {}
+  const query: Object | void = opts.query
+  const data: Object | void = opts.data
 
   throwIfValueNotAllowed (method, ["get", "put", "post", "patch", "delete"])
   throwIfValueNotAllowed (service, ["youtrack", "github"])
@@ -30,7 +30,7 @@ export default async (opts) => {
       : `token ${config.github.token}`,
   }
 
-  console.log (method, service, requestUrl)
+  console.log (method, service, requestUrl, query ? {query} : "", data ? {data} : "", "\n")
   return await request[method] (requestUrl)
     .set (toSet)
     .query (query)
