@@ -6,6 +6,8 @@ import type {
   EntityMapping,
 } from './types'
 
+import "colors"
+
 import integrationRest from "./integrationRest"
 import config from "../config/integration.config"
 
@@ -64,7 +66,7 @@ export const webhookHandler = {
     // iterate keys
     issueAndCommentsList.map (async (m) => {
       const {issue, comments} = m
-      console.log ("initial mapping", issue.id, comments && comments.map ((mm) => mm.id))
+      console.log ("Initial mapping".grey, issue.id, comments && comments.map ((mm) => mm.id))
       await webhookHandler.doMirroring (issue.service, issue, comments)
     })
   },
@@ -175,7 +177,7 @@ export const webhookHandler = {
 
   doMirroring: async (sourceService: string, entityOrId: string | Entity, comments: Array<IssueComment> | void) => {
     const sourceEntity: Entity = await webhookHandler.getEntityFromEntityOrId (sourceService, entityOrId)
-    console.log ("do mirroring for:", sourceEntity.service, sourceEntity.id, ", comment:", webhookHandler.getIsComment (sourceEntity))
+    console.log ("Do mirroring".grey, sourceEntity.service, sourceEntity.id, ", comment:", webhookHandler.getIsComment (sourceEntity))
 
     webhookHandler.addIdToMapping (sourceEntity)
 
@@ -194,7 +196,7 @@ export const webhookHandler = {
         targetEntity = await webhookHandler.getTargetEntity (knownEntityService, targetService)
 
         if (!targetEntity)
-          console.log (0, "no target entity for", knownEntityService, targetService)
+          console.log ("No target entity for".red, knownEntityService, targetService)
       }
 
       // if no target
@@ -202,25 +204,25 @@ export const webhookHandler = {
         // if original, create target mirror
         if (webhookHandler.getIsOriginal (sourceEntity)) {
           await webhookHandler.createMirror (sourceEntity)
-          console.log (1, "created mirror for", sourceEntity.service, sourceEntity.id)
+          console.log ("Created mirror for".magenta, sourceEntity.service, sourceEntity.id)
         }
         else {
           // todo add flag deleted
           await webhookHandler.deleteEntity (sourceEntity)
-          console.log (-1, `Entity is a mirror without original, deleted: ${sourceService}, ${sourceEntity.id}`,"comment: ", webhookHandler.getIsComment (sourceEntity))
+          console.log ("Entity is a mirror without original, deleted".red, sourceService,sourceEntity.id,"comment: ", webhookHandler.getIsComment (sourceEntity))
         }
       }
-      // if target is original and not source
+      // if target is original
       else if (webhookHandler.getIsOriginal (targetEntity)) {
         // todo, skip if there is no change, add flag synced
 
         // this does not sync comments, comments are synced bellow
-        console.log (2, "update mirrors", targetEntity.service, targetEntity.id)
+        console.log ("Update mirror".green, targetEntity.service, targetEntity.id)
 
         await webhookHandler.updateMirror (targetEntity)
       }
       else {
-        console.log (3, "skip mirror", targetEntity.service, targetEntity.id)
+        console.log ("Skip mirror".cyan, targetEntity.service, targetEntity.id)
       }
     }))
 
@@ -241,7 +243,7 @@ export const webhookHandler = {
     res.send ()
 
     throwIfValueNotAllowed (service, services)
-    console.log (`Webhook from "${service}", action: ${req.body.action}`)
+    console.log ("Webhook from".yellow, service, "action:", req.body.action)
 
     const rb = req.body
 
@@ -251,7 +253,7 @@ export const webhookHandler = {
       if (!issueId)
         return
 
-      console.log ("on changes", service, issueId)
+      console.log ("Issue has changed".magenta, service, issueId)
       await webhookHandler.doInitialMapping ()
 
       // await webhookHandler.doMirroring (service, issueId)
