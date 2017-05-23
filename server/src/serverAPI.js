@@ -103,9 +103,9 @@ export const webhookHandler = {
     res.send (`<pre>${JSON.stringify(store, null, "    ")}</pre>`)
   },
 
-  getIssueIdFromRequestBody: (sourceService: string, reqBody: Object): string => {
+  getIssueIdFromRequestBody: (sourceService: string, reqBody: Object): string | void => {
     if (sourceService === "youtrack") return reqBody.issueId.toString ()
-    if (sourceService === "github") return reqBody.issue.number.toString ()
+    if (sourceService === "github") return reqBody.issue && reqBody.issue.number.toString ()
   },
 
   getIdFromRawIssue: (sourceService: string, rawIssues: Object): string => {
@@ -246,9 +246,12 @@ export const webhookHandler = {
     const rb = req.body
 
     if (["deleted", "created", "opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
-      const issueId: string = webhookHandler.getIssueIdFromRequestBody(service, rb)
-      console.log ("on changes", service, issueId)
+      const issueId: string | void = webhookHandler.getIssueIdFromRequestBody(service, rb)
 
+      if (!issueId)
+        return
+
+      console.log ("on changes", service, issueId)
       await webhookHandler.doInitialMapping ()
 
       // await webhookHandler.doMirroring (service, issueId)
@@ -269,6 +272,7 @@ export const webhookHandler = {
   },
 
   deleteIssueInstance: async (issue: Issue) => {
+    // todo: set title and body to empty and status to closed
     console.log ("deletion of issue not implemented", issue.service, issue.id)
   },
 
