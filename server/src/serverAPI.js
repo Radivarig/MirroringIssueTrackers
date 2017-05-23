@@ -139,6 +139,7 @@ export const webhookHandler = {
       const knownEntityService: EntityService = {
         service: meta.service,
         id: meta.id,
+        issueId: meta.issueId,
       }
       // create mapping to original
       mappings.add (newEntityService, knownEntityService, {originalService: meta.service})
@@ -193,18 +194,12 @@ export const webhookHandler = {
           console.log (`Entity is a mirror without original: ${sourceService}, ${sourceEntity.id}`)
         }
       }
-      // if target
-      else if (webhookHandler.getIsOriginal (targetEntity)) {
-          // todo, skip if there is no change, add flag synced
+      // if target is original and not source
+      else if (targetService !== sourceService && webhookHandler.getIsOriginal (targetEntity)) {
+        // todo, skip if there is no change, add flag synced
 
-        if (targetService !== sourceService) {
-          console.log ("updating mirror", targetEntity.id)
-          if (webhookHandler.getIsComment (targetEntity)) {
-            console.log ("update comment TODO", targetEntity)
-          }
-            // this does not sync comments, comments are synced bellow
-          else await webhookHandler.updateMirror (targetEntity)
-        }
+        // this does not sync comments, comments are synced bellow
+        await webhookHandler.updateMirror (targetEntity)
       }
     }))
 
@@ -352,64 +347,57 @@ export const webhookHandler = {
     }
   },
 
-  updateMirrorComment: async (sourceService, issue: Issue, comment: IssueComment) => {
-    if (sourceService === "youtrack") {
-      const targetService = "github"
+  updateMirror: async (entity: Entity) => {
+    if (webhookHandler.getIsComment (entity))
+      await webhookHandler.updateMirrorComment (entity)
+    else await webhookHandler.updateMirrorIssue (entity)
+  },
 
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: issue.id,
-      })
+  updateMirrorComment: async (comment: IssueComment) => {
+    console.log ("updateMirrorComment", comment)
+    await Promise.all (services.map (async (targetService) => {
+      if (targetService === comment.service)
+        return
 
-      const mirrorCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: comment.id,
-      })
+      const knownIssueService: EntityService | void = {
+        service: comment.service,
+        id: comment.issueId,
+      }
+      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
 
-      const commentSignature = webhookHandler.getMirrorSignature (sourceService, targetService, issue, comment)
+      const knownCommentService: EntityService | void = {
+        service: comment.service,
+        id: comment.id,
+        issueId: comment.issueId,
+      }
+      const targetCommentService: EntityService | void = webhookHandler.getEntityService (knownCommentService, targetService)
 
-      return await integrationRest({
+      console.log ({targetService, knownIssueService, targetIssueService, knownCommentService, targetCommentService})
+
+      const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
+
+      const restParams = {
         service: targetService,
-        method: "patch",
-        url: `repos/${config.github.user}/${config.github.project}/issues/comments/${mirrorCommentId}`,
-        data: {
-          body: `${comment.body}\n\n${commentSignature}`,
-        },
-      })
+      }
+      const commentBody = `${comment.body}\n\n${signature}`
+
+      switch (targetService) {
+        case "youtrack":
+          restParams.method = "put"
+          restParams.url = `issue/${targetIssueService.id}/comment/${targetCommentService.id}`
+          restParams.data = {text: commentBody}
+          break
+        case "github":
+          restParams.method = "patch"
+          restParams.url = `repos/${config.github.user}/${config.github.project}/issues/comments/${targetCommentService.id}`
+          restParams.data = {body: commentBody}
+          break
+      }
+
+      await integrationRest (restParams)
       .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
-
-    if (sourceService === "github") {
-      const targetService = "youtrack"
-
-      const mirrorId = store.issueMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: issue.id,
-      })
-
-      const mirrorCommentId = store.commentMappings.getValueByKeyAndKnownKeyValue ({
-        key: targetService,
-        knownKey: sourceService,
-        knownValue: comment.id,
-      })
-
-      const commentSignature = webhookHandler.getMirrorSignature (sourceService, targetService, issue, comment)
-
-      return await integrationRest ({
-        service: targetService,
-        method: "put",
-        url: `issue/${mirrorId}/comment/${mirrorCommentId}`,
-        data: {
-          text: `${comment.body}\n\n${commentSignature}`,
-        },
-      })
-      .then ((response) => response.body)
-      .catch ((err) => console.log ({status: err.status}))
-    }
+      .catch ((err) => {throw err})
+    }))
   },
 
   getComments: async (sourceService: string, sourceIssueId: string): Array<IssueComment> => {
@@ -571,8 +559,9 @@ export const webhookHandler = {
 
   getMirrorSignature: (sourceService, targetService, entity: Entity): string => {
     const entityMetaData = {
-      id: entity.id,
       service: sourceService,
+      id: entity.id,
+      issueId: entity.issueId,
     }
 
     const entityHtmlComment = webhookHandler.wrapStringToHtmlComment (
@@ -585,7 +574,7 @@ export const webhookHandler = {
       return `{html}${entityHtmlComment}{html}`
   },
 
-  updateMirror: async (sourceIssue: Issue) => {
+  updateMirrorIssue: async (sourceIssue: Issue) => {
     services.forEach (async (targetService) => {
       if (targetService === sourceIssue.service)
         return
