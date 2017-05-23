@@ -51,7 +51,7 @@ export const webhookHandler = {
     issueAndComments.map (async (m) => {
       const {issue, comments} = m
       console.log ("initial mapping", issue.id, comments && comments.map ((mm) => mm.id))
-      await webhookHandler.doMirror (issue.service, issue, comments)
+      await webhookHandler.doMirroring (issue.service, issue, comments)
     })
   },
 
@@ -158,9 +158,9 @@ export const webhookHandler = {
     return await webhookHandler.getComment (knownEntityService)
   },
 
-  doMirror: async (sourceService: string, entityOrId: string | Entity, comments: Array<IssueComment> | void) => {
+  doMirroring: async (sourceService: string, entityOrId: string | Entity, comments: Array<IssueComment> | void) => {
     const sourceEntity: Entity = await webhookHandler.getEntityFromEntityOrId (sourceService, entityOrId)
-    console.log ("do mirror", sourceEntity.id, "comment", webhookHandler.getIsComment (sourceEntity))
+    console.log ("do mirroring for", sourceEntity.id, "comment", webhookHandler.getIsComment (sourceEntity))
 
     webhookHandler.addIdToMapping (sourceEntity)
 
@@ -216,7 +216,7 @@ export const webhookHandler = {
         comments = await webhookHandler.getComments (sourceEntity.service, sourceEntity.id)
 
       await Promise.all (comments.map (
-        async (comment) => await webhookHandler.doMirror (comment.service, comment)))
+        async (comment) => await webhookHandler.doMirroring (comment.service, comment)))
     }
 
   },
@@ -230,10 +230,10 @@ export const webhookHandler = {
 
     const rb = req.body
 
-    if (["created", "opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
+    if (["deleted", "created", "opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string = webhookHandler.getIssueIdFromRequestBody(service, rb)
       console.log ("on changes", service, issueId)
-      await webhookHandler.doMirror (service, issueId)
+      await webhookHandler.doMirroring (service, issueId)
     }
 
   },
@@ -378,6 +378,9 @@ export const webhookHandler = {
       const targetCommentService: EntityService | void = webhookHandler.getEntityService (knownCommentService, targetService)
 
       console.log ({targetService, knownIssueService, targetIssueService, knownCommentService, targetCommentService})
+
+      if (!targetIssueService || ! targetCommentService)
+        return
 
       const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
 
