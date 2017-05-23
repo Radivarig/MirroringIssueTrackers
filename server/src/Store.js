@@ -81,7 +81,7 @@ export class Mapping {
   }
 */
 
-export default {
-  issueMappings: new Mapping (),
-  commentMappings: new Mapping (),
+export default class Store {
+  issueMappings = new Mapping ()
+  commentMappings = new Mapping ()
 }

@@ -12,7 +12,8 @@ import config from "../config/integration.config"
 import {throwIfValueNotAllowed} from './helpers'
 
 import Store from './Store'
-const store = Store // new Store ()
+
+let store
 
 const mirrorMetaVarName = "MIRROR_META"
 
@@ -28,7 +29,7 @@ const services = ["github", "youtrack"]
 
 export const webhookHandler = {
   doInitialMapping: async () => {
-
+    store = new Store ()
     const issueAndComments: Array<{issue: Issue, comments: Array<IssueComment>}> = []
 
     await Promise.all (services.map (async (service) => {
@@ -129,6 +130,7 @@ export const webhookHandler = {
       service: entity.service,
       id: entity.id,
       issueId: entity.issueId,
+      body: entity.body,
     }
     if (webhookHandler.getIsOriginal (entity)) {
       mappings.add (newEntityService, undefined, {originalService: entity.service})
@@ -160,7 +162,7 @@ export const webhookHandler = {
 
   doMirroring: async (sourceService: string, entityOrId: string | Entity, comments: Array<IssueComment> | void) => {
     const sourceEntity: Entity = await webhookHandler.getEntityFromEntityOrId (sourceService, entityOrId)
-    console.log ("do mirroring for", sourceEntity.id, "comment", webhookHandler.getIsComment (sourceEntity))
+    console.log ("do mirroring for:", sourceEntity.service, sourceEntity.id, ", comment:", webhookHandler.getIsComment (sourceEntity))
 
     webhookHandler.addIdToMapping (sourceEntity)
 
@@ -233,7 +235,10 @@ export const webhookHandler = {
     if (["deleted", "created", "opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string = webhookHandler.getIssueIdFromRequestBody(service, rb)
       console.log ("on changes", service, issueId)
-      await webhookHandler.doMirroring (service, issueId)
+
+      await webhookHandler.doInitialMapping ()
+
+      // await webhookHandler.doMirroring (service, issueId)
     }
 
   },
