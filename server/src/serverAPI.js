@@ -27,7 +27,7 @@ const services = ["github", "youtrack"]
 // ===
 
 export const webhookHandler = {
-  getListWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {
+  getEntitiesWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {
     const originals = []
     const mirrors = []
 
@@ -46,13 +46,13 @@ export const webhookHandler = {
     await Promise.all (services.map (async (service) => {
       const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
 
-      await Promise.all (webhookHandler.getListWithOriginalsFirst (projectIssues).map (async (issue) => {
+      await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (projectIssues).map (async (issue) => {
 
         // filter to two arrays: then do originals first, mirrors second
         webhookHandler.addIdToMapping (issue)
 
         const comments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
-        await Promise.all (webhookHandler.getListWithOriginalsFirst (comments).map (async (comment) => webhookHandler.addIdToMapping (comment)))
+        await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (comments).map (async (comment) => webhookHandler.addIdToMapping (comment)))
 
         issueAndCommentsList.push ({
           issue,
