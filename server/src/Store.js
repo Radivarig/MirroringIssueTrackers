@@ -31,7 +31,7 @@ export class Mapping {
   }
 */
 
-  add (newEntityService: EntityService, knownService: EntityService | void, assignToMapping: Object = {}) {
+  add (newEntityService: EntityService, knownEntityService: EntityService | void, assignToMapping: Object = {}) {
     for (let i = 0; i < this.mappings.length; ++i) {
       const mapping: EntityMapping = this.mappings[i]
 
@@ -44,8 +44,8 @@ export class Mapping {
         return
       }
 
-      const knownMatch = knownService && mapping.services.filter ((f) =>
-        f.service === knownService.service && f.id === knownService.id
+      const knownMatch = knownEntityService && mapping.services.filter ((f) =>
+        f.service === knownEntityService.service && f.id === knownEntityService.id
       )[0]
 
       if (knownMatch) {
@@ -56,12 +56,18 @@ export class Mapping {
         return
       }
     }
+
+    if (knownEntityService) {
+      console.log ("Known entity service not found: ", knownEntityService)
+      return
+    }
+
     // create new mapping
     const newEntityMapping: EntityMapping = {services: []}
 
     // fill services
-    if (knownService)
-      newEntityMapping.services.push (knownService)
+    if (knownEntityService)
+      newEntityMapping.services.push (knownEntityService)
     newEntityMapping.services.push (newEntityService)
 
     // assign

@@ -12,7 +12,6 @@ import config from "../config/integration.config"
 import {throwIfValueNotAllowed} from './helpers'
 
 import Store from './Store'
-
 let store
 
 const mirrorMetaVarName = "MIRROR_META"
@@ -28,20 +27,34 @@ const services = ["github", "youtrack"]
 // ===
 
 export const webhookHandler = {
+  getListWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {
+    const originals = []
+    const mirrors = []
+
+    sourceList.forEach ((entity) => {
+      if (webhookHandler.getIsOriginal (entity))
+        mirrors.push (entity)
+      else originals.push (entity)
+    })
+    return originals.concat (mirrors)
+  },
+
   doInitialMapping: async () => {
     store = new Store ()
-    const issueAndComments: Array<{issue: Issue, comments: Array<IssueComment>}> = []
+    const issueAndCommentsList: Array<{issue: Issue, comments: Array<IssueComment>}> = []
 
     await Promise.all (services.map (async (service) => {
       const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
 
-      await Promise.all (projectIssues.map (async (issue) => {
+      await Promise.all (webhookHandler.getListWithOriginalsFirst (projectIssues).map (async (issue) => {
+
+        // filter to two arrays: then do originals first, mirrors second
         webhookHandler.addIdToMapping (issue)
 
         const comments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
-        await Promise.all (comments.map (async (comment) => webhookHandler.addIdToMapping (comment)))
+        await Promise.all (webhookHandler.getListWithOriginalsFirst (comments).map (async (comment) => webhookHandler.addIdToMapping (comment)))
 
-        issueAndComments.push ({
+        issueAndCommentsList.push ({
           issue,
           comments,
         })
@@ -49,7 +62,7 @@ export const webhookHandler = {
     }))
 
     // iterate keys
-    issueAndComments.map (async (m) => {
+    issueAndCommentsList.map (async (m) => {
       const {issue, comments} = m
       console.log ("initial mapping", issue.id, comments && comments.map ((mm) => mm.id))
       await webhookHandler.doMirroring (issue.service, issue, comments)
