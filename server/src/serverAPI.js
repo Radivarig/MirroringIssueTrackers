@@ -8,6 +8,7 @@ import type {
 } from './types'
 
 import "colors"
+import normalizeNewline from 'normalize-newline'
 
 import integrationRest from "./integrationRest"
 import config from "../config/integration.config"
@@ -560,15 +561,20 @@ export const webhookHandler = {
   },
 
   getFormatedComment: (service: string, rawComment: Object, issueId: string): IssueComment => {
+    let body
     const formatedComment = {
       id: rawComment.id.toString(),
       service,
       issueId,
     }
     switch (service) {
-      case "youtrack": formatedComment.body = rawComment.text; break
-      case "github": formatedComment.body = rawComment.body; break
+      case "youtrack": body = rawComment.text; break
+      case "github": body = rawComment.body; break
     }
+
+    // replace \r with \n
+    formatedComment.body = normalizeNewline (body)
+
     return formatedComment
   },
 
@@ -618,7 +624,7 @@ export const webhookHandler = {
           service,
           id: rawIssue.number.toString(),
           title: rawIssue.title,
-          body: rawIssue.body,
+          body: normalizeNewline (rawIssue.body),
           labels: rawIssue.labels.map ((l) => l.name),
         }
       }
@@ -631,7 +637,7 @@ export const webhookHandler = {
           if (f.name === "summary")
             title = f.value
           else if (f.name === "description")
-            body = f.value
+            body = normalizeNewline (f.value)
           else if (fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
             fields.push (f)
         })
