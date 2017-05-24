@@ -16,6 +16,9 @@ import {throwIfValueNotAllowed} from './helpers'
 import Store from './Store'
 let store
 
+let redoMirroring: boolean = false
+let mirroringInProgress: boolean = false
+
 const mirrorMetaVarName = "MIRROR_META"
 
 // === export to config
@@ -152,6 +155,14 @@ export const webhookHandler = {
   // call doSingleEntity for each comment,
 
   doMirroring: async () => {
+    if (mirroringInProgress) {
+      redoMirroring = true
+      return
+    }
+
+    redoMirroring = false
+    mirroringInProgress = true
+
     // clear store
     store = new Store ()
 
@@ -179,35 +190,48 @@ export const webhookHandler = {
     }))
 
     // restart doMirroring if issues were removed or created
-    const shouldRestart = doSingleEntityResponses.reduce ((a, b) => a || b)
-    if (shouldRestart) {
-      console.log ("Restart doMirroring".blue)
-      webhookHandler.doMirroring ()
-      return
+    const shouldAbort = doSingleEntityResponses.reduce ((a, b) => a || b)
+    if (shouldAbort) {
+      console.log ("Issues added or removed, aborting and waiting for webhook".blue)
+    }
+    else {
+      // else if no issues have been removed or created, proceede to comments
+
+      // get all comments
+      await Promise.all (allIssues.map (async (issue) => {
+        // fetching issue comments
+        const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
+        allComments.push (...issueComments)
+      }))
+
+      // sort comment origs first, do ids mapping
+      await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allComments).map (async (comment) => {
+        // mapping sorted comments origs first
+        webhookHandler.addIdToMapping (comment)
+      }))
+
+      // call doSingleEntity for every comment of every issue
+      allIssues.map (async (issue) => {
+        console.log ("Initial comment mapping".grey, webhookHandler.entityLog (issue),"comments:", allComments.length)
+
+        for (let i = 0; i < allComments.length; ++i)
+          await webhookHandler.doSingleEntity (allComments[i])
+      })
     }
 
-    return
-    // else if no issues have been removed or created, proceede to comments
+    mirroringInProgress = false
+    if (redoMirroring)
+      webhookHandler.initDoMirroring ()
+  },
 
-    // get all comments
-    await Promise.all (allIssues.map (async (issue) => {
-      // fetching issue comments
-      const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
-      allComments.push (...issueComments)
-    }))
-
-    // sort comment origs first, do ids mapping
-    await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allComments).map (async (comment) => {
-      // mapping sorted comments origs first
-      webhookHandler.addIdToMapping (comment)
-    }))
-
-    // call doSingleEntity for every comment of every issue
-    allIssues.map (async (issue) => {
-      console.log ("Initial comment mapping".grey, webhookHandler.entityLog (issue),"comments:", allComments.length)
-
-      for (let i = 0; i < allComments.length; ++i)
-        await webhookHandler.doSingleEntity (allComments[i])
+  initDoMirroring: async () => {
+    await webhookHandler.doMirroring ()
+    .catch ((err) => {
+      console.log ("doMirroring error".red, err)
+      setTimeout (() => {
+        // retry in 10s
+        webhookHandler.doMirroring ()
+      }, 10000)
     })
   },
 
@@ -226,8 +250,6 @@ export const webhookHandler = {
   // call doSingleEntity from doMirroring only
   // returns true if issue added or removed
   doSingleEntity: async (entity: Entity): boolean | void => {
-    console.log ("doSingleEntity", webhookHandler.entityLog (entity))
-
     // if original
     if (webhookHandler.getIsOriginal (entity)) {
       const mirrorEntity: Entity | void = await webhookHandler.getOtherEntity (entity)
@@ -290,7 +312,7 @@ export const webhookHandler = {
         return
 
       console.log ("Changed issue:".yellow, service, issueId)
-      await webhookHandler.doMirroring ()
+      await webhookHandler.initDoMirroring ()
     }
 
   },
