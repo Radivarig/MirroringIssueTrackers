@@ -368,8 +368,35 @@ export const webhookHandler = {
   },
 
   deleteIssueInstance: async (issue: Issue) => {
-    // todo: set title and body to empty and status to closed
-    console.log ("deletion of issue not implemented", issue.service, issue.id)
+    switch (issue.service) {
+      case "github": {
+        // delete all comments
+        const comments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
+        await Promise.all (comments.map (
+          async (comment) => await webhookHandler.deleteCommentInstance (comment)))
+
+        const signature: string = webhookHandler.getMetaAsIssueCommentHtmlComment ("github", {deleted: true})
+        const data = {
+          ...issue,
+          title: '(Issue removed)',
+          body: signature,
+          labels: ["IssueRemoved"],
+          state: "closed",
+        }
+
+        const restParams = {}
+        restParams.service = "github"
+        restParams.method = "patch"
+        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${issue.id}`
+        restParams.data = data
+
+        return await integrationRest(restParams)
+        .then ((response) => response.body)
+        .catch ((err) => {throw err})
+      }
+      // Github issues cannot be deleted, so noop
+      // case "youtrack":
+    }
   },
 
   deleteCommentInstance: async (comment: IssueComment) => {
@@ -613,8 +640,12 @@ export const webhookHandler = {
       issueId: entity.issueId,
     }
 
+    return webhookHandler.getMetaAsIssueCommentHtmlComment (targetService, entityMetaData)
+  },
+
+  getMetaAsIssueCommentHtmlComment: (targetService: string, meta: Object) => {
     let entityHtmlComment = webhookHandler.wrapStringToHtmlComment (
-      `${mirrorMetaVarName}=${JSON.stringify (entityMetaData)}`)
+      `${mirrorMetaVarName}=${JSON.stringify (meta)}`)
 
     if (targetService === "youtrack")
       entityHtmlComment = `{html}${entityHtmlComment}{html}`
