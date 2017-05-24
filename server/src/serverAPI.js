@@ -313,24 +313,52 @@ export const webhookHandler = {
 
   },
 
-  // TODO use fn to generate new entity and use it in create/update
+  getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
+    // todo, check for services instead &&
+    const labels = issue.fields && ["Mirror:Youtrack"].concat (webhookHandler.getLabelsFromFields (issue.fields))
+    const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
+
+    return {
+      ...issue,
+      body: issue.body + signature,
+      labels,
+    }
+  },
+
+  doListsContainSameElements: (listA: Array, listB: Array): boolean => {
+    if (listA.length !== listB.length)
+      return false
+
+    return (
+      listA.filter ((a) => listB.indexOf (a) === -1).length === 0 &&
+      listB.filter ((b) => listA.indexOf (b) === -1).length === 0
+    )
+  },
+
   getIsOriginalEqualToMirror: (originalEntity: Entity, mirrorEntity: Entity): boolean => {
     const signature = webhookHandler.getMirrorSignature (originalEntity.service, mirrorEntity.service, originalEntity)
-
-    if (webhookHandler.getIsComment (originalEntity))
+    if (webhookHandler.getIsComment (originalEntity)) {
       return originalEntity.body + signature === mirrorEntity.body
+    }
 
-    // TODO labels
+    const preparedOriginal: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (originalEntity, mirrorEntity.service)
+
+    // detect labels change
+    const areLabelsEqual = webhookHandler.doListsContainSameElements (
+      preparedOriginal.labels || [], mirrorEntity.labels || [])
+
+    // console.log ("equality", preparedOriginal, mirrorEntity, areLabelsEqual)
+
     return (
-      originalEntity.title === mirrorEntity.title &&
-      originalEntity.body + signature === mirrorEntity.body)
-      // originalEntity.labels === mirrorEntity.labels)
+      preparedOriginal.title === mirrorEntity.title &&
+      preparedOriginal.body === mirrorEntity.body &&
+      areLabelsEqual)
   },
 
   entityLog (entity: Entity): string {
     const servicePart = entity.service.underline
-    const idPart = entity.id.red.bgWhite
-    const commentPart = webhookHandler.getIsComment (entity) ? "(comment)" : ""
+    const idPart = entity.id.yellow
+    const commentPart = webhookHandler.getIsComment (entity) ? "(comment)".grey : ""
     return [servicePart, idPart, commentPart].join (" ")
   },
 
@@ -339,7 +367,7 @@ export const webhookHandler = {
     res.send ()
 
     throwIfValueNotAllowed (service, services)
-    console.log ("Webhook from".yellow, service, "action:".yellow, req.body.action)
+    console.log ("Webhook from".yellow, service.underline, "action:".yellow, req.body.action.blue)
 
     const rb = req.body
 
@@ -394,8 +422,7 @@ export const webhookHandler = {
         .then ((response) => response.body)
         .catch ((err) => {throw err})
       }
-      // Github issues cannot be deleted, so noop
-      // case "youtrack":
+      // case "youtrack": // Github issues cannot be deleted, so noop
     }
   },
 
@@ -592,7 +619,7 @@ export const webhookHandler = {
           id: rawIssue.number.toString(),
           title: rawIssue.title,
           body: rawIssue.body,
-          // labels: rawIssue.labels,
+          labels: rawIssue.labels.map ((l) => l.name),
         }
       }
       case "youtrack": {
@@ -609,14 +636,12 @@ export const webhookHandler = {
             fields.push (f)
         })
 
-        const labels = ["Mirror:Youtrack"].concat (webhookHandler.getLabelsFromFields (fields))
-
         return {
           service,
           id: rawIssue.id,
           title,
           body,
-          labels,
+          fields,
         }
       }
     }
@@ -670,14 +695,18 @@ export const webhookHandler = {
       }
 
       const restParams = {service: targetEntityService.service}
+
+      const preparedIssue: Issue = await webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
+
       switch (sourceIssue.service) {
         case "youtrack": {
           restParams.method = "patch"
           restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${targetEntityService.id}`
+
           restParams.data = {
-            title: sourceIssue.title,
-            body: sourceIssue.body + webhookHandler.getMirrorSignature (sourceIssue.service, targetService, sourceIssue),
-            labels: sourceIssue.labels,
+            title: preparedIssue.title,
+            body: preparedIssue.body,
+            labels: preparedIssue.labels,
           }
           break
         }
@@ -687,8 +716,9 @@ export const webhookHandler = {
           restParams.query = {
             // todo: move to sourceIssue.project
             project: config.youtrack.project,
-            summary: sourceIssue.title,
-            description: sourceIssue.body + webhookHandler.getMirrorSignature (sourceIssue.service, targetService, sourceIssue),
+            summary: preparedIssue.title,
+            description: preparedIssue.body,
+            // todo labels?
           }
           break
         }
