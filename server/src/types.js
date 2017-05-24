@@ -25,3 +25,8 @@ export type EntityMapping = {
   originalService: string | void;
   services: Array<EntityService>;
 }
+export type DoSingleEntityAction =
+  "created" |
+  "deleted" |
+  "skipped_mirror" |
+  "skipped_equal"

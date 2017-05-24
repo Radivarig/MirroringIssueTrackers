@@ -4,6 +4,7 @@ import type {
   Entity,
   EntityService,
   EntityMapping,
+  DoSingleEntityAction,
 } from './types'
 
 import "colors"
@@ -185,12 +186,15 @@ export const webhookHandler = {
     const doSingleEntityResponses = []
     await Promise.all (allIssues.map (async (issue) => {
       console.log ("Initial mapping".grey, webhookHandler.entityLog (issue))
-      const r = await webhookHandler.doSingleEntity (issue)
+      const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
       doSingleEntityResponses.push (r)
     }))
 
     // restart doMirroring if issues were removed or created
-    const shouldAbort = doSingleEntityResponses.reduce ((a, b) => a || b)
+    const shouldAbort = doSingleEntityResponses.reduce ((a, b) => {
+      const abortOnStrings = ["created", "deleted"]
+      return (abortOnStrings.indexOf (a) !== -1 || abortOnStrings.indexOf (b) !== -1)
+    })
     if (shouldAbort) {
       console.log ("Issues added or removed, aborting and waiting for webhook".blue)
     }
@@ -217,9 +221,9 @@ export const webhookHandler = {
       await Promise.all (allIssues.map (async (issue) => {
         for (let i = 0; i < issue.comments.length; ++i) {
           const comment: IssueComment = issue.comments[i]
-          const r = await webhookHandler.doSingleEntity (comment)
+          const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
           if (r === "created") {
-            console.log ("Comment added, aborting and waiting for webhook".blue)
+            console.log ("Comment created, aborting and waiting for webhook".blue)
             // this is for the order of comments, can't add multiple comments on single issue at once
             break
           }
@@ -259,8 +263,11 @@ export const webhookHandler = {
   },
 
   // call doSingleEntity from doMirroring only
-  // returns true if issue added or removed
-  doSingleEntity: async (entity: Entity): string | void => {
+  // returns string of action taken
+  doSingleEntity: async (entity: Entity): DoSingleEntityAction  => {
+    // todo use await Promise.all (services.map (async (targetService) => { doSingleEntity (targetService)
+    // instead getOtherEntity from inside
+
     // if original
     if (webhookHandler.getIsOriginal (entity)) {
       const mirrorEntity: Entity | void = await webhookHandler.getOtherEntity (entity)
@@ -270,38 +277,39 @@ export const webhookHandler = {
         // skip if equal
         if (webhookHandler.getIsOriginalEqualToMirror (entity, mirrorEntity)) {
           console.log ("Skip updating equal".grey, webhookHandler.entityLog (entity))
+          return "skipped_equal"
         }
-        else {
+
           // update if not equal
-          console.log ("Update mirror".green, webhookHandler.entityLog (entity))
-          webhookHandler.updateMirror (entity)
-        }
+        console.log ("Update mirror".green, webhookHandler.entityLog (entity))
+        webhookHandler.updateMirror (entity)
+        return "updated"
+
       }
-      else {
+
         // create mirror
-        console.log ("Create mirror for".green, webhookHandler.entityLog (entity))
-        webhookHandler.createMirror (entity)
+      console.log ("Create mirror for".green, webhookHandler.entityLog (entity))
+      webhookHandler.createMirror (entity)
         // return true to indicate a change that will redo doMapping
-        return "created"
-      }
+      return "created"
+
     }
     // else is mirror
-    else {
-      const origEntity: Entity | void = await webhookHandler.getOtherEntity (entity)
+
+    const origEntity: Entity | void = await webhookHandler.getOtherEntity (entity)
 
       // if has original
-      if (origEntity) {
+    if (origEntity) {
         // nothing, original will be called from doMirroring
-        console.log ("Skip mirror".grey, webhookHandler.entityLog (entity))
-      }
-      else {
-        // delete
-        console.log ("No original found for".red, webhookHandler.entityLog (entity))
-        webhookHandler.deleteEntity (entity)
-        // return to indicate a change that will redo doMapping
-        return "deleted"
-      }
+      console.log ("Skip mirror".grey, webhookHandler.entityLog (entity))
+      return "skipped_mirror"
     }
+
+        // delete
+    console.log ("No original found for".red, webhookHandler.entityLog (entity))
+    webhookHandler.deleteEntity (entity)
+        // return to indicate a change that will redo doMapping
+    return "deleted"
 
   },
 
