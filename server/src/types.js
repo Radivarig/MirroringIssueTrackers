@@ -27,6 +27,7 @@ export type EntityMapping = {
 }
 export type DoSingleEntityAction =
   "created" |
+  "updated" |
   "deleted" |
   "skipped_mirror" |
   "skipped_equal"
