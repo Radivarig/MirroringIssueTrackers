@@ -57,9 +57,30 @@ export const webhookHandler = {
   },
 
   getProjectIssues: async (sourceService: string) => {
+    switch (sourceService) {
+      case "youtrack":
+        return await webhookHandler.getProjectIssuesRaw (sourceService)
+      case "github": {
+        const openIssues = await webhookHandler.getProjectIssuesRaw (sourceService)
+
+        const closedQuery = {
+          state: "closed",
+          labels: "Mirror:Youtrack",
+        }
+        const closedIssues = await webhookHandler.getProjectIssuesRaw (sourceService, closedQuery)
+
+        return openIssues.concat (closedIssues)
+      }
+
+    }
+
+  },
+
+  getProjectIssuesRaw: async (sourceService: string, query: Object | void) => {
     const restParams = {
       service: sourceService,
       method: "get",
+      query,
     }
 
     switch (sourceService) {
@@ -68,9 +89,6 @@ export const webhookHandler = {
         break
       case "github":
         restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
-        restParams.query = {
-          state: "open",// open | closed | all
-        }
         break
     }
 
@@ -164,7 +182,7 @@ export const webhookHandler = {
   // sort originals first then mirrors,
   // map IDs in that order,
   // call doSingleEntity for each issue,
-  // call doSingleEntity for each comment,
+  // for each issue, call doSingleEntity for all comments,
 
   doMirroring: async () => {
     if (mirroringInProgress) {
@@ -203,7 +221,7 @@ export const webhookHandler = {
 
     // todo, use if and avoid
     if (allIssues.length === 0) {
-      console.log ("Nothing to do.".blue)
+      console.log ("No issues found".grey)
       mirroringInProgress = false
       return
     }
@@ -333,7 +351,7 @@ export const webhookHandler = {
 
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
     // todo, check for services instead &&
-    const labels = issue.fields && ["Mirror:Youtrack"].concat (webhookHandler.getLabelsFromFields (issue.fields))
+    const labels = issue.fields && webhookHandler.getLabelsFromFields (issue.fields).concat (["Mirror:Youtrack"])
     const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
 
     return {
@@ -375,7 +393,7 @@ export const webhookHandler = {
   },
 
   entityLog (entity: Entity): string {
-    const servicePart = entity.service.underline
+    const servicePart = entity.service.yellow
     const idPart = entity.id.yellow
     const commentPart = webhookHandler.getIsComment (entity) ? "(comment)".grey : ""
     return [servicePart, idPart, commentPart].join (" ")
@@ -639,7 +657,7 @@ export const webhookHandler = {
         // TODO labels, how to display them on youtrack if source is github,
         // should fields be permitted to change from github if source is youtrack?
 
-        console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
+        // console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
         return {
           service,
           id: rawIssue.number.toString(),
@@ -663,7 +681,7 @@ export const webhookHandler = {
             fields.push (f)
         })
 
-        console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
+        // console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
 
         const state = closedStateFields.indexOf
         return {
@@ -722,6 +740,7 @@ export const webhookHandler = {
   },
 
   updateMirrorIssue: async (sourceIssue: Issue) => {
+
     services.forEach (async (targetService) => {
       if (targetService === sourceIssue.service)
         return
@@ -762,7 +781,6 @@ export const webhookHandler = {
             project: config.youtrack.project,
             summary: preparedIssue.title,
             description: preparedIssue.body,
-            // todo labels?
             // todo set field state based on open | closed
           }
           break
@@ -842,7 +860,7 @@ export const webhookHandler = {
           restParams.data = {
             title: sourceIssue.title,
             body: `${sourceIssue.body}${signature}`,
-            labels: sourceIssue.labels,
+            // todo, if labels passed, possible github bug, creates some labels twice
           }
           break
         }
