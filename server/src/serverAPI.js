@@ -61,15 +61,19 @@ export const webhookHandler = {
       case "youtrack":
         return await webhookHandler.getProjectIssuesRaw (sourceService)
       case "github": {
-        const openIssues = await webhookHandler.getProjectIssuesRaw (sourceService)
 
-        const closedQuery = {
-          state: "closed",
-          labels: "Mirror:Youtrack",
-        }
+        // NOTE here is specified which issues should be mirrored to Youtrack
+        // temporary: this is single direction mirroring, yt -> gh, allowing only changes of mirrors
+        /*
+        const openQuery = {state: "open", labels: "Mirroring"}
+        const closedQuery = {state: "closed", labels: "Mirroring"}
+
+        const openIssues = await webhookHandler.getProjectIssuesRaw (sourceService, openQuery)
         const closedIssues = await webhookHandler.getProjectIssuesRaw (sourceService, closedQuery)
-
         return openIssues.concat (closedIssues)
+        */
+        const allMirroringQuery = {state: "all", labels: "Mirroring"}
+        return await webhookHandler.getProjectIssuesRaw (sourceService, allMirroringQuery)
       }
 
     }
@@ -312,19 +316,21 @@ export const webhookHandler = {
       if (mirrorEntity) {
         // skip if equal
         if (webhookHandler.getIsOriginalEqualToMirror (entity, mirrorEntity)) {
-          console.log ("Skip updating equal".grey, webhookHandler.entityLog (entity))
+          console.log ("Skip updating equal mirror of".grey, webhookHandler.entityLog (entity))
           return "skipped_equal"
         }
 
           // update if not equal
-        console.log ("Update mirror".green, webhookHandler.entityLog (entity))
+        console.log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity)
+          + "of".green, webhookHandler.entityLog (entity))
+
         webhookHandler.updateMirror (entity)
         return "updated"
 
       }
 
         // create mirror
-      console.log ("Create mirror for".green, webhookHandler.entityLog (entity))
+      console.log ("Create mirror of".green, webhookHandler.entityLog (entity))
       webhookHandler.createMirror (entity)
         // return true to indicate a change that will redo doMapping
       return "created"
@@ -337,12 +343,13 @@ export const webhookHandler = {
       // if has original
     if (origEntity) {
         // nothing, original will be called from doMirroring
-      console.log ("Skip mirror".grey, webhookHandler.entityLog (entity))
+      console.log ("Skip mirror".grey, webhookHandler.entityLog (entity)
+        + "of".grey, webhookHandler.entityLog (origEntity))
       return "skipped_mirror"
     }
 
         // delete
-    console.log ("No original found for".red, webhookHandler.entityLog (entity))
+    console.log ("No original found of".red, webhookHandler.entityLog (entity))
     webhookHandler.deleteEntity (entity)
         // return to indicate a change that will redo doMapping
     return "deleted"
@@ -351,7 +358,7 @@ export const webhookHandler = {
 
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
     // todo, check for services instead &&
-    const labels = issue.fields && webhookHandler.getLabelsFromFields (issue.fields).concat (["Mirror:Youtrack"])
+    const labels = issue.fields && webhookHandler.getLabelsFromFields (issue.fields).concat (["Mirroring"])
     const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
 
     return {
@@ -383,8 +390,6 @@ export const webhookHandler = {
     const areLabelsEqual = webhookHandler.doListsContainSameElements (
       preparedOriginal.labels || [], mirrorEntity.labels || [])
 
-    // console.log ("equality", preparedOriginal, mirrorEntity, areLabelsEqual)
-
     return (
       preparedOriginal.title === mirrorEntity.title &&
       preparedOriginal.body === mirrorEntity.body &&
@@ -408,7 +413,7 @@ export const webhookHandler = {
 
     const rb = req.body
 
-    if (["deleted", "created", "opened", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
+    if (["deleted", "created", "opened", "reopened", "closed", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string | void = webhookHandler.getIssueIdFromRequestBody(service, rb)
 
       if (!issueId)
@@ -683,14 +688,14 @@ export const webhookHandler = {
 
         // console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
 
-        const state = closedStateFields.indexOf
+        const state = webhookHandler.getStateFromRawIssue (service, rawIssue)
         return {
           service,
           id: rawIssue.id,
           title,
           body,
           fields,
-          state: webhookHandler.getStateFromRawIssue (service, rawIssue),
+          state,
         }
       }
     }
@@ -781,8 +786,23 @@ export const webhookHandler = {
             project: config.youtrack.project,
             summary: preparedIssue.title,
             description: preparedIssue.body,
-            // todo set field state based on open | closed
           }
+
+          const applyStateParams = {
+            service: targetEntityService.service,
+            method: "post",
+            url: `issue/${targetEntityService.id}/execute`,
+            query: {
+              // TODO move this to config and allow custom youtrack state field string for from UI
+              command: `State ${preparedIssue.state === "open" ? "Open" : "Verified"}`,
+            },
+          }
+
+          // apply new state
+          await integrationRest(applyStateParams)
+          .then ((response) => response.body)
+          .catch ((err) => {throw err})
+
           break
         }
       }
@@ -849,7 +869,7 @@ export const webhookHandler = {
       if (targetService === sourceIssue.service)
         return
 
-      const signature: string = webhookHandler.getMirrorSignature (sourceIssue.service, targetService, sourceIssue)
+      const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
       const restParams = {service: targetService}
 
@@ -858,9 +878,9 @@ export const webhookHandler = {
           restParams.method = "post"
           restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
           restParams.data = {
-            title: sourceIssue.title,
-            body: `${sourceIssue.body}${signature}`,
-            // todo, if labels passed, possible github bug, creates some labels twice
+            title: preparedIssue.title,
+            body: preparedIssue.body,
+            labels: preparedIssue.labels,
           }
           break
         }
@@ -870,8 +890,8 @@ export const webhookHandler = {
           restParams.query = {
             // todo: move to sourceIssue.project
             project: config.youtrack.project,
-            summary: sourceIssue.title,
-            description: `${sourceIssue.body}${signature}`,
+            summary: preparedIssue.title,
+            description: preparedIssue.body,
           }
           break
         }
