@@ -267,10 +267,15 @@ export const webhookHandler = {
 
       // if has mirror
       if (mirrorEntity) {
-        // update if not equal
-//         if (!webhookHandler.areEntitiesEqual (entity, mirrorEntity))
-        console.log ("Update mirror".cyan, webhookHandler.entityLog (entity))
-        webhookHandler.updateMirror (entity)
+        // skip if equal
+        if (webhookHandler.getIsOriginalEqualToMirror (entity, mirrorEntity)) {
+          console.log ("Skip updating equal".grey, webhookHandler.entityLog (entity))
+        }
+        else {
+          // update if not equal
+          console.log ("Update mirror".green, webhookHandler.entityLog (entity))
+          webhookHandler.updateMirror (entity)
+        }
       }
       else {
         // create mirror
@@ -298,6 +303,20 @@ export const webhookHandler = {
       }
     }
 
+  },
+
+  // TODO use fn to generate new entity and use it in create/update
+  getIsOriginalEqualToMirror: (originalEntity: Entity, mirrorEntity: Entity): boolean => {
+    const signature = webhookHandler.getMirrorSignature (originalEntity.service, mirrorEntity.service, originalEntity)
+
+    if (webhookHandler.getIsComment (originalEntity))
+      return originalEntity.body + signature === mirrorEntity.body
+
+    // TODO labels
+    return (
+      originalEntity.title === mirrorEntity.title &&
+      originalEntity.body + signature === mirrorEntity.body)
+      // originalEntity.labels === mirrorEntity.labels)
   },
 
   entityLog (entity: Entity): string {
@@ -402,7 +421,7 @@ export const webhookHandler = {
       const restParams = {
         service: targetService,
       }
-      const commentBody = `${comment.body}\n\n${signature}`
+      const commentBody = `${comment.body}${signature}`
 
       switch (targetService) {
         case "youtrack":
@@ -533,13 +552,12 @@ export const webhookHandler = {
       case "github": {
         // TODO labels, how to display them on youtrack if source is github,
         // should fields be permitted to change from github if source is youtrack?
-
         return {
           service,
           id: rawIssue.number.toString(),
           title: rawIssue.title,
           body: rawIssue.body,
-          labels: [],
+          // labels: rawIssue.labels,
         }
       }
       case "youtrack": {
@@ -587,14 +605,13 @@ export const webhookHandler = {
       issueId: entity.issueId,
     }
 
-    const entityHtmlComment = webhookHandler.wrapStringToHtmlComment (
+    let entityHtmlComment = webhookHandler.wrapStringToHtmlComment (
       `${mirrorMetaVarName}=${JSON.stringify (entityMetaData)}`)
 
-    if (targetService === "github")
-      return entityHtmlComment
-
     if (targetService === "youtrack")
-      return `{html}${entityHtmlComment}{html}`
+      entityHtmlComment = `{html}${entityHtmlComment}{html}`
+
+    return `\n\n${entityHtmlComment}`
   },
 
   updateMirrorIssue: async (sourceIssue: Issue) => {
@@ -667,13 +684,13 @@ export const webhookHandler = {
         case "youtrack":
           restParams.url = `issue/${targetIssueService.id}/execute`
           restParams.query = {
-            comment: `${comment.body}\n\n${signature}`,
+            comment: `${comment.body}${signature}`,
           }
           break
         case "github":
           restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${targetIssueService.id}/comments`
           restParams.data = {
-            body: `${comment.body}\n\n${signature}`,
+            body: `${comment.body}${signature}`,
           }
           break
       }
@@ -705,7 +722,7 @@ export const webhookHandler = {
           restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
           restParams.data = {
             title: sourceIssue.title,
-            body: `${sourceIssue.body}\n\n${signature}`,
+            body: `${sourceIssue.body}${signature}`,
             labels: sourceIssue.labels,
           }
           break
@@ -717,7 +734,7 @@ export const webhookHandler = {
             // todo: move to sourceIssue.project
             project: config.youtrack.project,
             summary: sourceIssue.title,
-            description: `${sourceIssue.body}\n\n${signature}`,
+            description: `${sourceIssue.body}${signature}`,
           }
           break
         }
