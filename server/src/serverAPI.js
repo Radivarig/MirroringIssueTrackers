@@ -202,6 +202,9 @@ export const webhookHandler = {
         // fetching issue comments
         const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
         allComments.push (...issueComments)
+
+        // adding as property to call doSingleEntity for comments at once on all issues
+        issue.comments = issueComments
       }))
 
       // sort comment origs first, do ids mapping
@@ -210,13 +213,18 @@ export const webhookHandler = {
         webhookHandler.addIdToMapping (comment)
       }))
 
-      // call doSingleEntity for every comment of every issue
-      allIssues.map (async (issue) => {
-        console.log ("Initial comment mapping".grey, webhookHandler.entityLog (issue),"comments:", allComments.length)
-
-        for (let i = 0; i < allComments.length; ++i)
-          await webhookHandler.doSingleEntity (allComments[i])
-      })
+      // call doSingleEntity for comments of every issue
+      await Promise.all (allIssues.map (async (issue) => {
+        for (let i = 0; i < issue.comments.length; ++i) {
+          const comment: IssueComment = issue.comments[i]
+          const r = await webhookHandler.doSingleEntity (comment)
+          if (r === "created") {
+            console.log ("Comment added, aborting and waiting for webhook".blue)
+            // this is for the order of comments, can't add multiple comments on single issue at once
+            break
+          }
+        }
+      }))
     }
 
     mirroringInProgress = false
@@ -226,13 +234,16 @@ export const webhookHandler = {
 
   initDoMirroring: async () => {
     await webhookHandler.doMirroring ()
+    /*
     .catch ((err) => {
-      console.log ("doMirroring error".red, err)
+      const ts = 10000
+      console.log (`doMirroring error, restarting in ${ts}`.red, err)
       setTimeout (() => {
-        // retry in 10s
+        // retry in ts
         webhookHandler.doMirroring ()
-      }, 10000)
+      }, ts)
     })
+    */
   },
 
   getOtherEntity: async (sourceEntity: Entity): Entity | void => {
@@ -249,7 +260,7 @@ export const webhookHandler = {
 
   // call doSingleEntity from doMirroring only
   // returns true if issue added or removed
-  doSingleEntity: async (entity: Entity): boolean | void => {
+  doSingleEntity: async (entity: Entity): string | void => {
     // if original
     if (webhookHandler.getIsOriginal (entity)) {
       const mirrorEntity: Entity | void = await webhookHandler.getOtherEntity (entity)
@@ -266,7 +277,7 @@ export const webhookHandler = {
         console.log ("Create mirror for".green, webhookHandler.entityLog (entity))
         webhookHandler.createMirror (entity)
         // return true to indicate a change that will redo doMapping
-        return true
+        return "created"
       }
     }
     // else is mirror
@@ -282,8 +293,8 @@ export const webhookHandler = {
         // delete
         console.log ("No original found for".red, webhookHandler.entityLog (entity))
         webhookHandler.deleteEntity (entity)
-        // return true to indicate a change that will redo doMapping
-        return true
+        // return to indicate a change that will redo doMapping
+        return "deleted"
       }
     }
 
@@ -301,7 +312,7 @@ export const webhookHandler = {
     res.send ()
 
     throwIfValueNotAllowed (service, services)
-    console.log ("Webhook from".yellow, service, ", action:".yellow, req.body.action)
+    console.log ("Webhook from".yellow, service, "action:".yellow, req.body.action)
 
     const rb = req.body
 
