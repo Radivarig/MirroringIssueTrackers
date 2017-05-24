@@ -31,6 +31,16 @@ const fieldsToIncludeAsLabels = [
 ]
 
 const services = ["github", "youtrack"]
+
+const closedStateFields = [
+  "Can't Reproduce",
+  "Duplicate",
+  "Fixed",
+  "Won't fix",
+  "Incomplete",
+  "Obsolete",
+  "Verified",
+]
 // ===
 
 export const webhookHandler = {
@@ -58,8 +68,8 @@ export const webhookHandler = {
         break
       case "github":
         restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
-        restParams.data = {
-          state: "open",// "all",
+        restParams.query = {
+          state: "open",// open | closed | all
         }
         break
     }
@@ -190,6 +200,13 @@ export const webhookHandler = {
       const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
       doSingleEntityResponses.push (r)
     }))
+
+    // todo, use if and avoid
+    if (allIssues.length === 0) {
+      console.log ("Nothing to do.".blue)
+      mirroringInProgress = false
+      return
+    }
 
     // restart doMirroring if issues were removed or created
     const shouldAbort = doSingleEntityResponses.reduce ((a, b) => {
@@ -353,6 +370,7 @@ export const webhookHandler = {
     return (
       preparedOriginal.title === mirrorEntity.title &&
       preparedOriginal.body === mirrorEntity.body &&
+      preparedOriginal.state === mirrorEntity.state &&
       areLabelsEqual)
   },
 
@@ -620,12 +638,15 @@ export const webhookHandler = {
       case "github": {
         // TODO labels, how to display them on youtrack if source is github,
         // should fields be permitted to change from github if source is youtrack?
+
+        console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
         return {
           service,
           id: rawIssue.number.toString(),
           title: rawIssue.title,
           body: normalizeNewline (rawIssue.body),
           labels: rawIssue.labels.map ((l) => l.name),
+          state: webhookHandler.getStateFromRawIssue (service, rawIssue),
         }
       }
       case "youtrack": {
@@ -642,15 +663,31 @@ export const webhookHandler = {
             fields.push (f)
         })
 
+        console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
+
+        const state = closedStateFields.indexOf
         return {
           service,
           id: rawIssue.id,
           title,
           body,
           fields,
+          state: webhookHandler.getStateFromRawIssue (service, rawIssue),
         }
       }
     }
+  },
+
+  getStateFromRawIssue: (service: string, rawIssue: Object) => {
+    switch (service) {
+      case "github": return rawIssue.state
+      case "youtrack": {
+        const stateFromField: string = rawIssue.field.filter ((f) => f.name === "State")[0].value[0]
+        const a = closedStateFields.indexOf (stateFromField) !== -1
+        return a ? "closed" : "open"
+      }
+    }
+
   },
 
   wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
@@ -713,6 +750,7 @@ export const webhookHandler = {
             title: preparedIssue.title,
             body: preparedIssue.body,
             labels: preparedIssue.labels,
+            state: preparedIssue.state,
           }
           break
         }
@@ -725,6 +763,7 @@ export const webhookHandler = {
             summary: preparedIssue.title,
             description: preparedIssue.body,
             // todo labels?
+            // todo set field state based on open | closed
           }
           break
         }
@@ -747,6 +786,11 @@ export const webhookHandler = {
         id: comment.issueId,
       }
       const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
+
+      if (!targetIssueService) {
+        console.log ("solve this error", {comment, targetService})
+        return
+      }
 
       const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
 
