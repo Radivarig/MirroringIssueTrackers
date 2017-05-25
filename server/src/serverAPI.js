@@ -228,7 +228,7 @@ export const webhookHandler = {
 
     // todo, use if and avoid
     if (allIssues.length === 0) {
-      console.log ("No issues found".grey)
+      console.log ("No issues found")
       mirroringInProgress = false
       return
     }
@@ -277,6 +277,7 @@ export const webhookHandler = {
     mirroringInProgress = false
     if (redoMirroring)
       webhookHandler.initDoMirroring ()
+    else console.log ("Done")
   },
 
   initDoMirroring: async () => {
@@ -324,8 +325,8 @@ export const webhookHandler = {
         }
 
           // update if not equal
-        console.log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity)
-          + "of".green, webhookHandler.entityLog (entity))
+        console.log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity),
+          "of".green, webhookHandler.entityLog (entity))
 
         webhookHandler.updateMirror (entity)
         return "updated"
@@ -346,8 +347,8 @@ export const webhookHandler = {
       // if has original
     if (origEntity) {
         // nothing, original will be called from doMirroring
-      console.log ("Skip mirror".grey, webhookHandler.entityLog (entity)
-        + "of".grey, webhookHandler.entityLog (origEntity))
+      console.log ("Skip mirror".grey, webhookHandler.entityLog (entity),
+        "of".grey, webhookHandler.entityLog (origEntity))
       return "skipped_mirror"
     }
 
@@ -406,11 +407,13 @@ export const webhookHandler = {
       areLabelsEqual)
   },
 
-  entityLog (entity: Entity): string {
-    const servicePart = entity.service.yellow
-    const idPart = entity.id.yellow
-    const commentPart = webhookHandler.getIsComment (entity) ? "(comment)".grey : ""
-    return [servicePart, idPart, commentPart].join (" ")
+  entityLog: (entity: Entity): string => {
+    const parts = []
+    parts.push (entity.service.yellow)
+    parts.push (entity.id.yellow)
+    if (webhookHandler.getIsComment (entity))
+      parts.push ("(comment)".grey)
+    return parts.join (" ")
   },
 
   handleRequest: async (service, req, res) => {
