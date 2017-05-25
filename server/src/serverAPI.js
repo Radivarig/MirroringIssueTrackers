@@ -349,7 +349,7 @@ export const webhookHandler = {
     }
 
         // delete
-    console.log ("No original found of".red, webhookHandler.entityLog (entity))
+    console.log ("Deleting mirror".red, webhookHandler.entityLog (entity))
     webhookHandler.deleteEntity (entity)
         // return to indicate a change that will redo doMapping
     return "deleted"
@@ -358,7 +358,12 @@ export const webhookHandler = {
 
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
     // todo, check for services instead &&
-    const labels = issue.fields && webhookHandler.getLabelsFromFields (issue.fields).concat (["Mirroring"])
+    let labels = issue.fields || issue.tags ? ["Mirroring"] : undefined
+    if (issue.fields)
+      labels = labels.concat (webhookHandler.getLabelsFromFields (issue.fields))
+    if (issue.tags)
+      labels = labels.concat (webhookHandler.getLabelsFromTags (issue.tags))
+
     const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
 
     return {
@@ -390,6 +395,7 @@ export const webhookHandler = {
     const areLabelsEqual = webhookHandler.doListsContainSameElements (
       preparedOriginal.labels || [], mirrorEntity.labels || [])
 
+    //console.log ({preparedOriginal, mirrorEntity, areLabelsEqual})
     return (
       preparedOriginal.title === mirrorEntity.title &&
       preparedOriginal.body === mirrorEntity.body &&
@@ -483,7 +489,7 @@ export const webhookHandler = {
         break
     }
 
-    console.log ("DELETING", restParams)
+    // console.log ("DELETING", restParams)
     await integrationRest (restParams)
     .then ((response) => response.body)
     .catch ((err) => {throw err})
@@ -649,6 +655,11 @@ export const webhookHandler = {
     return webhookHandler.getFormatedIssue (sourceService, rawIssue)
   },
 
+  getLabelsFromTags: (tags/*: Array<{name: string, value: string}>*/): Array<string> =>
+    tags.map ((tag) =>
+      // add here handles for field.specialAttr
+       `Tag:${tag.value}`),
+
   getLabelsFromFields: (fields/*: Array<{name: string, value: string}>*/): Array<string> =>
     fields.map ((field) =>
       // add here handles for field.specialAttr
@@ -662,7 +673,6 @@ export const webhookHandler = {
         // TODO labels, how to display them on youtrack if source is github,
         // should fields be permitted to change from github if source is youtrack?
 
-        // console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
         return {
           service,
           id: rawIssue.number.toString(),
@@ -689,6 +699,7 @@ export const webhookHandler = {
         // console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
 
         const state = webhookHandler.getStateFromRawIssue (service, rawIssue)
+
         return {
           service,
           id: rawIssue.id,
@@ -696,6 +707,7 @@ export const webhookHandler = {
           body,
           fields,
           state,
+          tags: rawIssue.tag,
         }
       }
     }
