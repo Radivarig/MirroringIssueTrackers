@@ -80,6 +80,9 @@ export const webhookHandler = {
 
   },
 
+  composeYoutrackId: (id: string): string => `${config.youtrack.project}-${id}`,
+  extractYoutrackId: (fullId: string): string => fullId.split("-")[1],
+
   getProjectIssuesRaw: async (sourceService: string, query: Object | void) => {
     const restParams = {
       service: sourceService,
@@ -419,7 +422,7 @@ export const webhookHandler = {
 
     const rb = req.body
 
-    if (["deleted", "created", "opened", "reopened", "closed", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
+    if (["labeled", "deleted", "created", "opened", "reopened", "closed", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string | void = webhookHandler.getIssueIdFromRequestBody(service, rb)
 
       if (!issueId)
@@ -727,20 +730,50 @@ export const webhookHandler = {
 
   wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
 
-  getMeta: (issueOrComment: Issue | IssueComment): Object | void => {
+  getMeta: (entity: Entity): Object | void => {
+    const metaRaw = webhookHandler.getMetaRaw (entity)
+
+    if (!metaRaw)
+      return
+
+    // reattach youtrack project prefix
+    if (metaRaw.id && metaRaw.service === "youtrack") {
+      // only for issue.id and comment.issueId
+      if (metaRaw.issueId) // is a comment
+        metaRaw.issueId = webhookHandler.composeYoutrackId (metaRaw.issueId)
+      // only comments have issueId, this is issue then
+      else metaRaw.id = webhookHandler.composeYoutrackId (metaRaw.id)
+    }
+    return metaRaw
+  },
+
+  getMetaRaw: (entity: Entity): Object | void => {
     const varStart = `<!--${mirrorMetaVarName}=`
     const varEnd = "-->"
     const regexStr = `${varStart}(.*)${varEnd}`
-    const regexRE = issueOrComment.body.match(new RegExp(regexStr))
+    const regexRE = entity.body.match(new RegExp(regexStr))
     if (regexRE && regexRE.length > 1)
       return JSON.parse(regexRE[1])
   },
 
+  // todo, remove source service, use entity.service
   getMirrorSignature: (sourceService, targetService, entity: Entity): string => {
+    // remove youtrack issue prefix as it's changable
+    let {id, issueId} = entity
+
+    // if service is youtrack
+    if (entity.service === "youtrack") {
+      // if is comment
+      if (entity.issueId)
+        issueId = webhookHandler.extractYoutrackId (entity.issueId)
+      // else it is issue
+      else id = webhookHandler.extractYoutrackId (entity.id)
+    }
+
     const entityMetaData = {
       service: sourceService,
-      id: entity.id,
-      issueId: entity.issueId,
+      id,
+      issueId,
     }
 
     return webhookHandler.getMetaAsIssueCommentHtmlComment (targetService, entityMetaData)
