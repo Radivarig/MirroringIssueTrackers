@@ -30,7 +30,7 @@ export default async (opts) => {
       : `token ${config.github.token}`,
   }
 
-  console.log (method, service, requestUrl, query ? {query} : "", data ? {data} : "", "\n")
+  // console.log (method, service, requestUrl, query ? {query} : "", data ? {data} : "", "\n")
   return await request[method] (requestUrl)
     .set (toSet)
     .query (query)
