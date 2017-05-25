@@ -41,6 +41,9 @@ const throwOnCreationRecursion = (entity: Entity) => {
   return true
 }
 
+let startTime
+let keepTiming
+
 const mirrorMetaVarName = "MIRROR_META"
 
 // === export to config
@@ -239,7 +242,11 @@ export const webhookHandler = {
     // get all issues
     await Promise.all (services.map (async (service) => {
       const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
-      allIssues.push (...projectIssues.filter (webhookHandler.getIsIssueBlacklistedByTags))
+      // filter
+      allIssues.push (...projectIssues.filter ((issue) => (
+        // blacklisted
+        !webhookHandler.getIsIssueBlacklistedByTags (issue)
+      )))
     }))
 
     // sort issue origs first, do ids mapping, get comments
@@ -248,93 +255,107 @@ export const webhookHandler = {
       webhookHandler.addIdToMapping (issue)
     }))
 
+    let shouldAbort = false
+
     // call doSingleEntity for every issue
-    const doSingleEntityResponses = []
     await Promise.all (allIssues.map (async (issue) => {
       console.log ("Initial mapping".grey, webhookHandler.entityLog (issue))
       const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
-      doSingleEntityResponses.push (r)
+
+      if (["created", "deleted"].indexOf (r) !== -1)
+        shouldAbort = true
+
+      if (shouldAbort || r === "updated")
+        keepTiming = true
     }))
 
-    // todo, use if and avoid
+    if (shouldAbort) {
+      console.log ("Issue action taken, waiting for webhook".blue)
+      mirroringInProgress = false
+      return
+    }
+
     if (allIssues.length === 0) {
       console.log ("No issues found")
       mirroringInProgress = false
       return
     }
 
-    // restart doMirroring if issues were removed or created
-    const shouldAbort = doSingleEntityResponses.reduce ((a, b) => {
-      const abortOnStrings = ["created", "deleted"]
-      return (abortOnStrings.indexOf (a) !== -1 || abortOnStrings.indexOf (b) !== -1)
-    })
-    if (shouldAbort) {
-      console.log ("Issues added or removed, aborting and waiting for webhook".blue)
-    }
-    else {
-      // else if no issues have been removed or created, proceede to comments
-
-      // get all comments
-      await Promise.all (allIssues.map (async (issue) => {
+    // get all comments
+    await Promise.all (allIssues.map (async (issue) => {
         // fetching issue comments
-        const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
-        allComments.push (...issueComments)
+      const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
+      allComments.push (...issueComments)
 
         // adding as property to call doSingleEntity for comments at once on all issues
-        issue.comments = issueComments
-      }))
+      issue.comments = issueComments
+    }))
 
       // sort comment origs first, do ids mapping
-      await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allComments).map (async (comment) => {
+    await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allComments).map (async (comment) => {
         // mapping sorted comments origs first
-        webhookHandler.addIdToMapping (comment)
-      }))
+      webhookHandler.addIdToMapping (comment)
+    }))
 
       // call doSingleEntity for comments of every issue
-      await Promise.all (allIssues.map (async (issue) => {
-        for (let i = 0; i < issue.comments.length; ++i) {
-          const comment: IssueComment = issue.comments[i]
-          const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
-          if (r === "created") {
-            console.log ("Comment created, aborting and waiting for webhook".blue)
-            // this is for the order of comments, can't add multiple comments on single issue at once
-            break
-          }
+    await Promise.all (allIssues.map (async (issue) => {
+      for (let i = 0; i < issue.comments.length; ++i) {
+        const comment: IssueComment = issue.comments[i]
+        const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
+
+        if (["created", "deleted", "updated"].indexOf (r) !== -1)
+          keepTiming = true
+
+        if (r === "created") {
+          console.log ("Comment action taken, waiting for webhook".blue)
+          // break for the order of comments, can't add multiple comments on single issue at once
+          break
         }
-      }))
-    }
+      }
+    }))
 
     mirroringInProgress = false
     if (redoMirroring)
       webhookHandler.initDoMirroring ()
-    else console.log ("Done")
+    else if (!keepTiming) {
+      console.log ("Done", webhookHandler.getFormatedTimeFromStart ().yellow)
+      startTime = undefined
+    }
+  },
+
+  // move to helpers.js
+  getFormatedTimeFromStart: (): string => {
+    const dt = (new Date().getTime () - startTime) / 1000
+    return [dt / 3600, dt % 3600 / 60, dt % 60].map((p) => Math.round(p)).join (":")
   },
 
   getIsIssueBlacklistedByTags: (issue: Issue): boolean => {
     // if issue not from youtrack
     if (!issue.tags)
-      return true
+      return false
 
     const issueTags: Array<string> = issue.tags.map ((t) => t.value)
 
       // if tags contain force mirroring tag
     if (issueTags.indexOf (forceMirroringTag) !== -1)
-      return true
+      return false
 
       // if intersection
     for (let i = 0; i < issueTags.length; ++i) {
       const tag: string = issueTags[i]
 
       if (mirroringBlacklistTags.indexOf (tag) !== -1) {
-        console.log ("Issue is blacklisted for mirroring", webhookHandler.entityLog (issue))
-        return false
+        console.log ("Issue is blacklisted for mirroring".grey, webhookHandler.entityLog (issue))
+        return true
       }
     }
       // no intersection
-    return true
+    return false
   },
 
   initDoMirroring: async () => {
+    startTime = startTime || new Date ().getTime ()
+    keepTiming = false
     await webhookHandler.doMirroring ()
     /*
     .catch ((err) => {
@@ -478,7 +499,7 @@ export const webhookHandler = {
 
     const rb = req.body
 
-    if (["labeled", "deleted", "created", "opened", "reopened", "closed", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
+    if (["labeled", "unlabeled", "deleted", "created", "opened", "reopened", "closed", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string | void = webhookHandler.getIssueIdFromRequestBody(service, rb)
 
       if (!issueId)
@@ -529,7 +550,10 @@ export const webhookHandler = {
         .then ((response) => response.body)
         .catch ((err) => {throw err})
       }
-      // case "youtrack": // Github issues cannot be deleted, so noop
+      case "youtrack": {
+        // Github issues cannot be deleted, so noop
+        // todo: handle case when label "Mirroring" is removed from github original
+      }
     }
   },
 
