@@ -34,10 +34,12 @@ const throwOnCreationRecursion = (entity: Entity) => {
   // set creation flag
   recentlyCreatedIdsObj[id] = true
 
+/*
   setTimeout (() => {
     // remove creation flag after timeout
     recentlyCreatedIdsObj[id] = undefined
   }, 5000)
+*/
   return true
 }
 
