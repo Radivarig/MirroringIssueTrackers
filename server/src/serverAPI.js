@@ -32,6 +32,7 @@ const fieldsToIncludeAsLabels = [
 
 const services = ["github", "youtrack"]
 
+// note: field values are case sensitive
 const closedStateFields = [
   "Can't Reproduce",
   "Duplicate",
@@ -41,6 +42,15 @@ const closedStateFields = [
   "Obsolete",
   "Verified",
 ]
+
+// note: tags are lowercase
+const mirroringBlacklistTags = [
+  "topsecret",
+  "verysecurity",
+  "muchpasswords",
+  "suchcrypto",
+]
+const forceMirroringTag = "forcemirroring"
 // ===
 
 export const webhookHandler = {
@@ -209,7 +219,7 @@ export const webhookHandler = {
     // get all issues
     await Promise.all (services.map (async (service) => {
       const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
-      allIssues.push (...projectIssues)
+      allIssues.push (...projectIssues.filter (webhookHandler.getIsIssueBlacklistedByTags))
     }))
 
     // sort issue origs first, do ids mapping, get comments
@@ -278,6 +288,30 @@ export const webhookHandler = {
     if (redoMirroring)
       webhookHandler.initDoMirroring ()
     else console.log ("Done")
+  },
+
+  getIsIssueBlacklistedByTags: (issue: Issue): boolean => {
+    // if issue not from youtrack
+    if (!issue.tags)
+      return true
+
+    const issueTags: Array<string> = issue.tags.map ((t) => t.value)
+
+      // if tags contain force mirroring tag
+    if (issueTags.indexOf (forceMirroringTag) !== -1)
+      return true
+
+      // if intersection
+    for (let i = 0; i < issueTags.length; ++i) {
+      const tag: string = issueTags[i]
+
+      if (mirroringBlacklistTags.indexOf (tag) !== -1) {
+        console.log ("Issue is blacklisted for mirroring", webhookHandler.entityLog (issue))
+        return false
+      }
+    }
+      // no intersection
+    return true
   },
 
   initDoMirroring: async () => {
