@@ -243,10 +243,11 @@ export const webhookHandler = {
     await Promise.all (services.map (async (service) => {
       const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
       // filter
-      allIssues.push (...projectIssues.filter ((issue) => (
-        // blacklisted
-        !webhookHandler.getIsIssueBlacklistedByTags (issue)
-      )))
+      allIssues.push (...projectIssues.filter ((issue) => {
+        const isNotYoutrackBlacklisted = issue.service === "youtrack" && !webhookHandler.getIsIssueBlacklistedByTags (issue)
+        const isNotNonYoutrackOriginal = issue.service !== "youtrack" && !webhookHandler.getIsOriginal (issue)
+        return isNotYoutrackBlacklisted || isNotNonYoutrackOriginal
+      }))
     }))
 
     // sort issue origs first, do ids mapping, get comments
@@ -276,7 +277,7 @@ export const webhookHandler = {
     }
 
     if (allIssues.length === 0) {
-      console.log ("No issues found")
+      console.log ("No issues to mirror")
       mirroringInProgress = false
       return
     }
@@ -326,7 +327,7 @@ export const webhookHandler = {
   // move to helpers.js
   getFormatedTimeFromStart: (): string => {
     const dt = (new Date().getTime () - startTime) / 1000
-    return [dt / 3600, dt % 3600 / 60, dt % 60].map((p) => Math.round(p)).join (":")
+    return [dt / 3600, dt % 3600 / 60, dt % 60].map((p) => Math.floor(p)).join (":")
   },
 
   getIsIssueBlacklistedByTags: (issue: Issue): boolean => {
