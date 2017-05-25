@@ -21,6 +21,26 @@ let store
 let redoMirroring: boolean = false
 let mirroringInProgress: boolean = false
 
+const recentlyCreatedIdsObj: Object = {}
+
+const throwOnCreationRecursion = (entity: Entity) => {
+  // get unique id
+  const id: string = [entity.service, entity.id, entity.issueId].join ("_")
+
+  // throw if recently requested creation of same id
+  if (recentlyCreatedIdsObj[id])
+    throw "Possible recursion".red
+
+  // set creation flag
+  recentlyCreatedIdsObj[id] = true
+
+  setTimeout (() => {
+    // remove creation flag after timeout
+    recentlyCreatedIdsObj[id] = undefined
+  }, 5000)
+  return true
+}
+
 const mirrorMetaVarName = "MIRROR_META"
 
 // === export to config
@@ -367,7 +387,6 @@ export const webhookHandler = {
 
       }
 
-        // create mirror
       console.log ("Create mirror of".green, webhookHandler.entityLog (entity))
       webhookHandler.createMirror (entity)
         // return true to indicate a change that will redo doMapping
@@ -941,6 +960,7 @@ export const webhookHandler = {
   },
 
   createMirror: async (entity: Entity) => {
+    throwOnCreationRecursion (entity)
     if (webhookHandler.getIsComment (entity))
       return await webhookHandler.createMirrorComment (entity)
     return await webhookHandler.createMirrorIssue (entity)
