@@ -105,7 +105,9 @@ export const webhookHandler = {
     let shouldAbort = false
 
     // call doSingleEntity for every issue
-    await Promise.all (allIssues.map (async (issue) => {
+    for (let i = 0; i < allIssues.length; ++i) {
+      const issue = allIssues[i]
+
       log ("Initial mapping".grey, webhookHandler.entityLog (issue))
       const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
 
@@ -113,12 +115,11 @@ export const webhookHandler = {
         shouldAbort = true
 
       if (shouldAbort || r === "updated")
-        keepTiming = true
-    }))
+        webhookHandler.doWaitingForWebhook (issue)
+    }
 
     if (shouldAbort) {
-      log ("Issue action taken, waiting for webhook".blue)
-      mirroringInProgress = false
+      log ("Aborting until webhook".blue)
       return
     }
 
@@ -154,7 +155,7 @@ export const webhookHandler = {
           keepTiming = true
 
         if (r === "created") {
-          log ("Comment action taken, waiting for webhook".blue)
+          webhookHandler.doWaitingForWebhook (comment)
           // break for the order of comments, can't add multiple comments on single issue at once
           break
         }
@@ -190,7 +191,7 @@ export const webhookHandler = {
           return "skipped_equal"
         }
 
-          // update if not equal
+        // update if not equal
         log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity),
           "of".green, webhookHandler.entityLog (entity))
 
@@ -234,12 +235,26 @@ export const webhookHandler = {
     return originals.concat (mirrors)
   },
 
+  doWaitingForWebhook: (entity: Entity) => {
+    keepTiming = true
+    log ("Waiting for webhook after action related to".blue, webhookHandler.entityLog (entity).yellow)
+    /*
+    gotWebhook = false
+    setTimeout (() => {
+      if (gotWebhook === false)
+        throw `Timeout${webhookHandler.getFormatedTimeFromStart ()}`
+    }, 30000)
+    */
+
+  },
+
   getProjectIssues: async (sourceService: string) => {
     switch (sourceService) {
-      case "youtrack":
-        return await webhookHandler.getProjectIssuesRaw (sourceService)
+      case "youtrack": {
+        const query = {max: 10000}
+        return await webhookHandler.getProjectIssuesRaw (sourceService, query)
+      }
       case "github": {
-
         // NOTE here is specified which issues should be mirrored to Youtrack
         // temporary: this is single direction mirroring, yt -> gh, allowing only changes of mirrors
         /*
@@ -250,7 +265,11 @@ export const webhookHandler = {
         const closedIssues = await webhookHandler.getProjectIssuesRaw (sourceService, closedQuery)
         return openIssues.concat (closedIssues)
         */
-        const allMirroringQuery = {state: "all", labels: "Mirroring"}
+        const allMirroringQuery = {
+          state: "all",
+          labels: "Mirroring",
+          per_page: 100,
+        }
         return await webhookHandler.getProjectIssuesRaw (sourceService, allMirroringQuery)
       }
     }
@@ -271,24 +290,55 @@ export const webhookHandler = {
         restParams.url = `issue/byproject/${auth.youtrack.project}`
         break
       case "github":
+        // restParams.sort = "created" // have to do it manually anyway (async per page)
         restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
         break
     }
 
+    let linksObj
     const rawIssues = await integrationRest (restParams)
-    .then ((response) => response.body)
+    .then ((response) => {linksObj = response.links; return response.body})
     .catch ((err) => {throw err})
+
+    // embrace forced pagination...
+    if (sourceService === "github" && linksObj && linksObj.last) {
+      const lastUrl = linksObj.last
+      const urls = []
+      const afterUrlIndex = helpers.getIndexAfterLast (`${auth.github.url}/`, lastUrl)
+      const afterPageEqIndex = helpers.getIndexAfterLast ("page=", lastUrl)
+      const pagesCount/*: number */= Number.parseInt (lastUrl.substring (afterPageEqIndex))
+
+      // starting from 2, already have page1 issues,
+      // including pagesCount as page1 is first not page0,
+      // +1 to get extra page just to be sure (new issue pushes another to last+1 page)
+      for (let i = 2; i <= pagesCount + 1; ++i) {
+        const url = lastUrl.substring (afterUrlIndex, afterPageEqIndex) + i
+        urls.push (url)
+      }
+      const linksParams = {
+        service: "github",
+        method: "get",
+      }
+      await Promise.all (urls.map (async (url) => {
+        const perPageIssues = await integrationRest ({...linksParams, url})
+        .then ((response) => response.body)
+        .catch ((err) => {throw err})
+
+        rawIssues.push (...perPageIssues)
+      }))
+    }
 
     const issues = []
     for (let i = 0; i < rawIssues.length; ++i) {
       const rawIssue = rawIssues[i]
       issues.push (webhookHandler.getFormatedIssue (sourceService, rawIssue))
     }
+
     return issues
   },
 
   doStuff: async (req, res) => {
-    res.send (`<pre>${JSON.stringify(store, null, "    ")}</pre>`)
+    res.send (`<div>Elapsed: ${webhookHandler.getFormatedTimeFromStart ()}</div><pre>${JSON.stringify(store, null, "    ")}</pre>`)
   },
 
   getIssueIdFromRequestBody: (sourceService: string, reqBody: Object): string | void => {
@@ -466,12 +516,15 @@ export const webhookHandler = {
     const areLabelsEqual = webhookHandler.doListsContainSameElements (
       preparedOriginal.labels || [], mirrorEntity.labels || [])
 
-    //log ({preparedOriginal, mirrorEntity, areLabelsEqual})
-    return (
+    const areEqual = (
       preparedOriginal.title === mirrorEntity.title &&
       preparedOriginal.body === mirrorEntity.body &&
       preparedOriginal.state === mirrorEntity.state &&
       areLabelsEqual)
+
+    // if (!areEqual) log ({preparedOriginal, mirrorEntity, areLabelsEqual})
+
+    return areEqual
   },
 
   entityLog: (entity: Entity): string => {
@@ -973,8 +1026,10 @@ export const webhookHandler = {
     const id: string = [entity.service, entity.id, entity.issueId].join ("_")
 
     // throw if recently requested creation of same id
-    if (recentlyCreatedIdsObj[id])
+    if (recentlyCreatedIdsObj[id]) {
+      log ("Recursion for creating".red, webhookHandler.entityLog (entity).yellow)
       throw "Possible recursion".red
+    }
 
     // set creation flag
     recentlyCreatedIdsObj[id] = true
