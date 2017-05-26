@@ -28,26 +28,6 @@ let mirroringInProgress: boolean = false
 
 const recentlyCreatedIdsObj: Object = {}
 
-const throwOnCreationRecursion = (entity: Entity) => {
-  // get unique id
-  const id: string = [entity.service, entity.id, entity.issueId].join ("_")
-
-  // throw if recently requested creation of same id
-  if (recentlyCreatedIdsObj[id])
-    throw "Possible recursion".red
-
-  // set creation flag
-  recentlyCreatedIdsObj[id] = true
-
-/*
-  setTimeout (() => {
-    // remove creation flag after timeout
-    recentlyCreatedIdsObj[id] = undefined
-  }, 5000)
-*/
-  return true
-}
-
 let startTime
 let keepTiming
 
@@ -1004,8 +984,28 @@ export const webhookHandler = {
     }))
   },
 
+  throwOnCreationRecursion: (entity: Entity) => {
+    // get unique id
+    const id: string = [entity.service, entity.id, entity.issueId].join ("_")
+
+    // throw if recently requested creation of same id
+    if (recentlyCreatedIdsObj[id])
+      throw "Possible recursion".red
+
+    // set creation flag
+    recentlyCreatedIdsObj[id] = true
+
+    /*
+    setTimeout (() => {
+      // remove creation flag after timeout
+      recentlyCreatedIdsObj[id] = undefined
+    }, 5000)
+    */
+    return true
+  },
+
   createMirror: async (entity: Entity) => {
-    throwOnCreationRecursion (entity)
+    webhookHandler.throwOnCreationRecursion (entity)
     if (webhookHandler.getIsComment (entity))
       return await webhookHandler.createMirrorComment (entity)
     return await webhookHandler.createMirrorIssue (entity)
