@@ -15,13 +15,16 @@ export default async (opts) => {
   throwIfValueNotAllowed (service, ["youtrack", "github"])
 
   let baseUrl
+  let protocol
   switch (service) {
     case "github":
+      protocol = "https"
       baseUrl = auth.github.url; break
     case "youtrack":
+      protocol = "http"
       baseUrl = auth.youtrack.url; break
   }
-  const requestUrl = `https://${path.join (baseUrl, url)}`
+  const requestUrl = `${protocol}://${path.join (baseUrl, url)}`
 
   const toSet = {
     "Accept": "application/json",
