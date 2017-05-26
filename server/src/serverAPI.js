@@ -437,19 +437,47 @@ export const webhookHandler = {
 
   },
 
+  getGithubCounterparts: (issueIds: Array<string>): Array<string> =>
+    issueIds.map ((issueId) => {
+      // return if id is from another project
+      if (issueId.split("-")[0] !== config.youtrack.project)
+        return undefined
+      const knownEntityService = {service: "youtrack", id: issueId}
+      const counterpart = webhookHandler.getEntityService (knownEntityService, "github")
+      return counterpart && counterpart.id
+    }).filter (Boolean),
+
+  getHierarchyStringBlock: (issue: Issue): string => {
+    let s = ""
+    if (issue.parentFor || issue.subtaskOf) {
+      const parentForGithubIssues = webhookHandler.getGithubCounterparts (issue.parentFor || [])
+      const subtaskOfGithubIssues = webhookHandler.getGithubCounterparts (issue.subtaskOf || [])
+
+      if (parentForGithubIssues.length !== 0 || subtaskOfGithubIssues.length !== 0) {
+        s += "\n\n#\n" // make slim horizontal line
+        if (parentForGithubIssues.length !== 0)
+          s += `<code>Parent for:</code>${parentForGithubIssues.map ((c) => `#${c}`).join (", ")}\n`
+        if (subtaskOfGithubIssues.length !== 0)
+          s += `<code>Subtask of:</code>${subtaskOfGithubIssues.map ((c) => `#${c}`).join (", ")}\n`
+      }
+    }
+    return s
+  },
+
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
-    // todo, check for services instead &&
+    // todo, switch (issue.service) instead
     let labels = issue.fields || issue.tags ? ["Mirroring"] : undefined
     if (issue.fields)
       labels = labels.concat (webhookHandler.getLabelsFromFields (issue.fields))
     if (issue.tags)
       labels = labels.concat (webhookHandler.getLabelsFromTags (issue.tags))
 
+    const hierarchy = webhookHandler.getHierarchyStringBlock (issue)
     const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
 
     return {
       ...issue,
-      body: issue.body + signature,
+      body: issue.body + hierarchy + signature,
       labels,
     }
   },
@@ -772,12 +800,23 @@ export const webhookHandler = {
         let title = ""
         let body = ""
         const fields = []
+        const parentFor = []
+        const subtaskOf = []
 
         rawIssue.field.forEach ((f) => {
           if (f.name === "summary")
             title = f.value
           else if (f.name === "description")
             body = normalizeNewline (f.value)
+          else if (f.name === "links") {
+            f.value.forEach ((l) => {
+              if (l.type === "Subtask" && l.role === "subtask of")
+                subtaskOf.push (l.value)
+              else if (l.type === "Subtask" && l.role === "parent for")
+                parentFor.push (l.value)
+            })
+
+          }
           else if (fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
             fields.push (f)
         })
@@ -792,6 +831,8 @@ export const webhookHandler = {
           title,
           body,
           fields,
+          parentFor,
+          subtaskOf,
           state,
           tags: rawIssue.tag,
         }
