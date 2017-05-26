@@ -43,7 +43,7 @@ export const webhookHandler = {
     res.send ()
 
     helpers.throwIfValueNotAllowed (service, services)
-    log ("Webhook from".yellow, service, "action:".yellow, req.body.action.blue)
+    log ("Webhook from".yellow, service, "action:".yellow, (req.body.action || "").blue)
 
     const rb = req.body
 
