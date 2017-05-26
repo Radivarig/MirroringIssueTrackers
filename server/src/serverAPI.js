@@ -494,15 +494,16 @@ export const webhookHandler = {
     }
   },
 
-  doListsContainSameElements: (listA: Array, listB: Array): boolean => {
-    if (listA.length !== listB.length)
-      return false
+  doListsContainSameElements: (listA: Array, listB: Array): boolean =>
 
-    return (
+    // disabled because of github bug that sometimes creates duplicated label..
+    // if (listA.length !== listB.length)
+    // return false
+
+     (
       listA.filter ((a) => listB.indexOf (a) === -1).length === 0 &&
       listB.filter ((b) => listA.indexOf (b) === -1).length === 0
-    )
-  },
+    ),
 
   getIsOriginalEqualToMirror: (originalEntity: Entity, mirrorEntity: Entity): boolean => {
     const signature = webhookHandler.getMirrorSignature (originalEntity.service, mirrorEntity.service, originalEntity)
