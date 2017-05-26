@@ -6,7 +6,11 @@ export const throwIfValueNotAllowed = (value, allowed: Array) => {
 export const formatTimestampAsDuration = (ts: number): string =>
   [ts / 3600, ts % 3600 / 60, ts % 60].map((p) => Math.floor(p)).join (":")
 
+export const getIndexAfterLast = (str: string, inStr: string): number => inStr.lastIndexOf (str) + str.length
+
 export default {
   throwIfValueNotAllowed,
   formatTimestampAsDuration,
+  getIndexAfterLast,
 }
+
