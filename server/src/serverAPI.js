@@ -35,7 +35,7 @@ const mirrorMetaVarName = "MIRROR_META"
 const services = ["github", "youtrack"]
 
 const log = (...args) => {
-  console.log(...args)
+  console.log(...args) // eslint-disable-line no-console
 }
 
 export const webhookHandler = {
@@ -278,8 +278,10 @@ export const webhookHandler = {
     }))
 
     mirroringInProgress = false
-    if (redoMirroring)
+    if (redoMirroring) {
+      log ("Received webhook during last run".grey, "restarting".blue)
       webhookHandler.initDoMirroring ()
+    }
     else if (!keepTiming) {
       log ("Done", webhookHandler.getFormatedTimeFromStart ().yellow)
       startTime = undefined
@@ -483,7 +485,7 @@ export const webhookHandler = {
     res.send ()
 
     throwIfValueNotAllowed (service, services)
-    log ("Webhook from".yellow, service.underline, "action:".yellow, req.body.action.blue)
+    log ("Webhook from".yellow, service, "action:".yellow, req.body.action.blue)
 
     const rb = req.body
 
