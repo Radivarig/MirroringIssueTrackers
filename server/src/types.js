@@ -1,5 +1,18 @@
-// todo: add url
+export type AuthConfig = {
+  youtrack: {
+    url: string;
+    token: string;
+    project: string;
+  };
+  github: {
+    url: string;
+    token: string;
+    user: string;
+    project: string;
+  };
+}
 
+// todo: add url
 export type Issue = {
   id: string;
   title: string;

@@ -1,4 +1,5 @@
 import type {
+  AuthConfig,
   Issue,
   IssueComment,
   Entity,
@@ -11,7 +12,11 @@ import "colors"
 import normalizeNewline from 'normalize-newline'
 
 import integrationRest from "./integrationRest"
-import config from "../config/integration.config"
+
+// import auth from "../config/auth.config"
+const auth: AuthConfig = require ("../config/auth.config").default
+
+import settings from "../config/settings.config"
 
 import {throwIfValueNotAllowed} from './helpers'
 
@@ -47,36 +52,7 @@ let startTime
 let keepTiming
 
 const mirrorMetaVarName = "MIRROR_META"
-
-// === export to config
-const fieldsToIncludeAsLabels = [
-  "Priority",
-  "State",
-  "Type",
-]
-
 const services = ["github", "youtrack"]
-
-// note: field values are case sensitive
-const closedStateFields = [
-  "Can't Reproduce",
-  "Duplicate",
-  "Fixed",
-  "Won't fix",
-  "Incomplete",
-  "Obsolete",
-  "Verified",
-]
-
-// note: tags are lowercase
-const mirroringBlacklistTags = [
-  "topsecret",
-  "verysecurity",
-  "muchpasswords",
-  "suchcrypto",
-]
-const forceMirroringTag = "forcemirroring"
-// ===
 
 const log = (...args) => {
   console.log(...args)
@@ -119,7 +95,7 @@ export const webhookHandler = {
 
   },
 
-  composeYoutrackId: (id: string): string => `${config.youtrack.project}-${id}`,
+  composeYoutrackId: (id: string): string => `${auth.youtrack.project}-${id}`,
   extractYoutrackId: (fullId: string): string => fullId.split("-")[1],
 
   getProjectIssuesRaw: async (sourceService: string, query: Object | void) => {
@@ -131,10 +107,10 @@ export const webhookHandler = {
 
     switch (sourceService) {
       case "youtrack":
-        restParams.url = `issue/byproject/${config.youtrack.project}`
+        restParams.url = `issue/byproject/${auth.youtrack.project}`
         break
       case "github":
-        restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
         break
     }
 
@@ -344,14 +320,14 @@ export const webhookHandler = {
     const issueTags: Array<string> = issue.tags.map ((t) => t.value)
 
       // if tags contain force mirroring tag
-    if (issueTags.indexOf (forceMirroringTag) !== -1)
+    if (issueTags.indexOf (settings.forceMirroringTag) !== -1)
       return false
 
       // if intersection
     for (let i = 0; i < issueTags.length; ++i) {
       const tag: string = issueTags[i]
 
-      if (mirroringBlacklistTags.indexOf (tag) !== -1) {
+      if (settings.mirroringBlacklistTags.indexOf (tag) !== -1) {
         log ("Issue is blacklisted for mirroring".grey, webhookHandler.entityLog (issue))
         return true
       }
@@ -457,9 +433,9 @@ export const webhookHandler = {
       if (parentForGithubIssues.length !== 0 || subtaskOfGithubIssues.length !== 0) {
         s += "\n\n#\n" // make slim horizontal line
         if (parentForGithubIssues.length !== 0)
-          s += `<code>Parent for:</code>${parentForGithubIssues.map ((c) => `#${c}`).join (", ")}\n`
+          s += `<code>Parent for:</code> ${parentForGithubIssues.map ((c) => `#${c}`).join (", ")}\n`
         if (subtaskOfGithubIssues.length !== 0)
-          s += `<code>Subtask of:</code>${subtaskOfGithubIssues.map ((c) => `#${c}`).join (", ")}\n`
+          s += `<code>Subtask of:</code> ${subtaskOfGithubIssues.map ((c) => `#${c}`).join (", ")}\n`
       }
     }
     return s
@@ -575,7 +551,7 @@ export const webhookHandler = {
         const restParams = {}
         restParams.service = "github"
         restParams.method = "patch"
-        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${issue.id}`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${issue.id}`
         restParams.data = data
 
         return await integrationRest(restParams)
@@ -600,7 +576,7 @@ export const webhookHandler = {
         restParams.query = {permanently: true}
         break
       case "github":
-        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/comments/${comment.id}`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/comments/${comment.id}`
         break
     }
 
@@ -656,7 +632,7 @@ export const webhookHandler = {
           break
         case "github":
           restParams.method = "patch"
-          restParams.url = `repos/${config.github.user}/${config.github.project}/issues/comments/${targetCommentService.id}`
+          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/comments/${targetCommentService.id}`
           restParams.data = {body: commentBody}
           break
       }
@@ -684,7 +660,7 @@ export const webhookHandler = {
         break
       }
       case "github": {
-        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${sourceIssueId}/comments`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${sourceIssueId}/comments`
         break
       }
     }
@@ -708,7 +684,7 @@ export const webhookHandler = {
         restParams.url = `issue/${knownEntityService.issueId}/comment/`
         break
       case "github":
-        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/comments/${knownEntityService.id}`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/comments/${knownEntityService.id}`
         break
     }
 
@@ -751,7 +727,7 @@ export const webhookHandler = {
       }
       case "github": {
         restParams.method = "get"
-        restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${issueId}`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${issueId}`
         break
       }
     }
@@ -818,7 +794,7 @@ export const webhookHandler = {
             })
 
           }
-          else if (fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
+          else if (settings.fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
             fields.push (f)
         })
 
@@ -846,7 +822,7 @@ export const webhookHandler = {
       case "github": return rawIssue.state
       case "youtrack": {
         const stateFromField: string = rawIssue.field.filter ((f) => f.name === "State")[0].value[0]
-        const a = closedStateFields.indexOf (stateFromField) !== -1
+        const a = settings.closedStateFields.indexOf (stateFromField) !== -1
         return a ? "closed" : "open"
       }
     }
@@ -938,7 +914,7 @@ export const webhookHandler = {
       switch (sourceIssue.service) {
         case "youtrack": {
           restParams.method = "patch"
-          restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${targetEntityService.id}`
+          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetEntityService.id}`
 
           restParams.data = {
             title: preparedIssue.title,
@@ -953,7 +929,7 @@ export const webhookHandler = {
           restParams.url = `issue/${targetEntityService.id}`
           restParams.query = {
             // todo: move to sourceIssue.project
-            project: config.youtrack.project,
+            project: auth.youtrack.project,
             summary: preparedIssue.title,
             description: preparedIssue.body,
           }
@@ -1015,7 +991,7 @@ export const webhookHandler = {
           }
           break
         case "github":
-          restParams.url = `repos/${config.github.user}/${config.github.project}/issues/${targetIssueService.id}/comments`
+          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
           restParams.data = {
             body: `${comment.body}${signature}`,
           }
@@ -1047,7 +1023,7 @@ export const webhookHandler = {
       switch (targetService) {
         case "github": {
           restParams.method = "post"
-          restParams.url = `repos/${config.github.user}/${config.github.project}/issues`
+          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
           restParams.data = {
             title: preparedIssue.title,
             body: preparedIssue.body,
@@ -1060,7 +1036,7 @@ export const webhookHandler = {
           restParams.url = "issue"
           restParams.query = {
             // todo: move to sourceIssue.project
-            project: config.youtrack.project,
+            project: auth.youtrack.project,
             summary: preparedIssue.title,
             description: preparedIssue.body,
           }
