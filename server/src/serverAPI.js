@@ -78,6 +78,10 @@ const mirroringBlacklistTags = [
 const forceMirroringTag = "forcemirroring"
 // ===
 
+const log = (...args) => {
+  console.log(...args)
+}
+
 export const webhookHandler = {
   getEntitiesWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {
     const originals = []
@@ -262,7 +266,7 @@ export const webhookHandler = {
 
     // call doSingleEntity for every issue
     await Promise.all (allIssues.map (async (issue) => {
-      console.log ("Initial mapping".grey, webhookHandler.entityLog (issue))
+      log ("Initial mapping".grey, webhookHandler.entityLog (issue))
       const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
 
       if (["created", "deleted"].indexOf (r) !== -1)
@@ -273,13 +277,13 @@ export const webhookHandler = {
     }))
 
     if (shouldAbort) {
-      console.log ("Issue action taken, waiting for webhook".blue)
+      log ("Issue action taken, waiting for webhook".blue)
       mirroringInProgress = false
       return
     }
 
     if (allIssues.length === 0) {
-      console.log ("No issues to mirror")
+      log ("No issues to mirror")
       mirroringInProgress = false
       return
     }
@@ -310,7 +314,7 @@ export const webhookHandler = {
           keepTiming = true
 
         if (r === "created") {
-          console.log ("Comment action taken, waiting for webhook".blue)
+          log ("Comment action taken, waiting for webhook".blue)
           // break for the order of comments, can't add multiple comments on single issue at once
           break
         }
@@ -321,7 +325,7 @@ export const webhookHandler = {
     if (redoMirroring)
       webhookHandler.initDoMirroring ()
     else if (!keepTiming) {
-      console.log ("Done", webhookHandler.getFormatedTimeFromStart ().yellow)
+      log ("Done", webhookHandler.getFormatedTimeFromStart ().yellow)
       startTime = undefined
     }
   },
@@ -348,7 +352,7 @@ export const webhookHandler = {
       const tag: string = issueTags[i]
 
       if (mirroringBlacklistTags.indexOf (tag) !== -1) {
-        console.log ("Issue is blacklisted for mirroring".grey, webhookHandler.entityLog (issue))
+        log ("Issue is blacklisted for mirroring".grey, webhookHandler.entityLog (issue))
         return true
       }
     }
@@ -363,7 +367,7 @@ export const webhookHandler = {
     /*
     .catch ((err) => {
       const ts = 10000
-      console.log (`doMirroring error, restarting in ${ts}`.red, err)
+      log (`doMirroring error, restarting in ${ts}`.red, err)
       setTimeout (() => {
         // retry in ts
         webhookHandler.doMirroring ()
@@ -398,12 +402,12 @@ export const webhookHandler = {
       if (mirrorEntity) {
         // skip if equal
         if (webhookHandler.getIsOriginalEqualToMirror (entity, mirrorEntity)) {
-          console.log ("Skip updating equal mirror of".grey, webhookHandler.entityLog (entity))
+          log ("Skip updating equal mirror of".grey, webhookHandler.entityLog (entity))
           return "skipped_equal"
         }
 
           // update if not equal
-        console.log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity),
+        log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity),
           "of".green, webhookHandler.entityLog (entity))
 
         webhookHandler.updateMirror (entity)
@@ -411,7 +415,7 @@ export const webhookHandler = {
 
       }
 
-      console.log ("Create mirror of".green, webhookHandler.entityLog (entity))
+      log ("Create mirror of".green, webhookHandler.entityLog (entity))
       webhookHandler.createMirror (entity)
         // return true to indicate a change that will redo doMapping
       return "created"
@@ -424,13 +428,13 @@ export const webhookHandler = {
       // if has original
     if (origEntity) {
         // nothing, original will be called from doMirroring
-      console.log ("Skip mirror".grey, webhookHandler.entityLog (entity),
+      log ("Skip mirror".grey, webhookHandler.entityLog (entity),
         "of".grey, webhookHandler.entityLog (origEntity))
       return "skipped_mirror"
     }
 
         // delete
-    console.log ("Deleting mirror".red, webhookHandler.entityLog (entity))
+    log ("Deleting mirror".red, webhookHandler.entityLog (entity))
     webhookHandler.deleteEntity (entity)
         // return to indicate a change that will redo doMapping
     return "deleted"
@@ -439,9 +443,6 @@ export const webhookHandler = {
 
   getGithubCounterparts: (issueIds: Array<string>): Array<string> =>
     issueIds.map ((issueId) => {
-      // return if id is from another project
-      if (issueId.split("-")[0] !== config.youtrack.project)
-        return undefined
       const knownEntityService = {service: "youtrack", id: issueId}
       const counterpart = webhookHandler.getEntityService (knownEntityService, "github")
       return counterpart && counterpart.id
@@ -504,7 +505,7 @@ export const webhookHandler = {
     const areLabelsEqual = webhookHandler.doListsContainSameElements (
       preparedOriginal.labels || [], mirrorEntity.labels || [])
 
-    //console.log ({preparedOriginal, mirrorEntity, areLabelsEqual})
+    //log ({preparedOriginal, mirrorEntity, areLabelsEqual})
     return (
       preparedOriginal.title === mirrorEntity.title &&
       preparedOriginal.body === mirrorEntity.body &&
@@ -526,7 +527,7 @@ export const webhookHandler = {
     res.send ()
 
     throwIfValueNotAllowed (service, services)
-    console.log ("Webhook from".yellow, service.underline, "action:".yellow, req.body.action.blue)
+    log ("Webhook from".yellow, service.underline, "action:".yellow, req.body.action.blue)
 
     const rb = req.body
 
@@ -536,7 +537,7 @@ export const webhookHandler = {
       if (!issueId)
         return
 
-      console.log ("Changed issue:".yellow, service, issueId)
+      log ("Changed issue:".yellow, service, issueId)
       await webhookHandler.initDoMirroring ()
     }
 
@@ -603,7 +604,7 @@ export const webhookHandler = {
         break
     }
 
-    // console.log ("DELETING", restParams)
+    // log ("DELETING", restParams)
     await integrationRest (restParams)
     .then ((response) => response.body)
     .catch ((err) => {throw err})
@@ -635,7 +636,7 @@ export const webhookHandler = {
       }
       const targetCommentService: EntityService | void = webhookHandler.getEntityService (knownCommentService, targetService)
 
-      // console.log ({targetService, knownIssueService, targetIssueService, knownCommentService, targetCommentService})
+      // log ({targetService, knownIssueService, targetIssueService, knownCommentService, targetCommentService})
 
       if (!targetIssueService || ! targetCommentService)
         return
@@ -821,7 +822,7 @@ export const webhookHandler = {
             fields.push (f)
         })
 
-        // console.log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
+        // log (service, webhookHandler.getStateFromRawIssue (service, rawIssue))
 
         const state = webhookHandler.getStateFromRawIssue (service, rawIssue)
 
@@ -926,7 +927,7 @@ export const webhookHandler = {
       const targetEntityService: EntityService | void = webhookHandler.getEntityService (knownEntityService, targetService)
 
       if (!targetEntityService) {
-        console.log (`no target (${targetService}) for (${sourceIssue.service}:${sourceIssue.id})`)
+        log (`no target (${targetService}) for (${sourceIssue.service}:${sourceIssue.id})`)
         return
       }
 
@@ -995,7 +996,7 @@ export const webhookHandler = {
       const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
 
       if (!targetIssueService) {
-        console.log ("solve this error", {comment, targetService})
+        log ("solve this error", {comment, targetService})
         return
       }
 
