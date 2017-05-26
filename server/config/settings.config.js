@@ -7,6 +7,10 @@ export default {
 
   // note: field values are case sensitive
   closedStateFields: [
+    "Done",
+    "Aborted",
+    "Duplicate",
+    /*
     "Can't Reproduce",
     "Duplicate",
     "Fixed",
@@ -14,6 +18,7 @@ export default {
     "Incomplete",
     "Obsolete",
     "Verified",
+    */
   ],
 
   // note: tags are lowercase
