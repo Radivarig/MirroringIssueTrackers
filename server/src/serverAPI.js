@@ -12,13 +12,12 @@ import "colors"
 import normalizeNewline from 'normalize-newline'
 
 import integrationRest from "./integrationRest"
+import helpers from "./helpers"
 
 // import auth from "../config/auth.config"
 const auth: AuthConfig = require ("../config/auth.config").default
 
 import settings from "../config/settings.config"
-
-import {throwIfValueNotAllowed} from './helpers'
 
 import Store from './Store'
 let store
@@ -288,10 +287,9 @@ export const webhookHandler = {
     }
   },
 
-  // move to helpers.js
   getFormatedTimeFromStart: (): string => {
     const dt = (new Date().getTime () - startTime) / 1000
-    return [dt / 3600, dt % 3600 / 60, dt % 60].map((p) => Math.floor(p)).join (":")
+    return helpers.formatTimestampAsDuration (dt)
   },
 
   getIsIssueBlacklistedByTags: (issue: Issue): boolean => {
@@ -484,7 +482,7 @@ export const webhookHandler = {
     // respond so that youtrack doesn't hang... (opened an issue about it)
     res.send ()
 
-    throwIfValueNotAllowed (service, services)
+    helpers.throwIfValueNotAllowed (service, services)
     log ("Webhook from".yellow, service, "action:".yellow, req.body.action.blue)
 
     const rb = req.body
