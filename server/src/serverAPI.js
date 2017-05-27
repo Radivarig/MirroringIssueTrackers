@@ -24,6 +24,7 @@ const store = new Store ()
 
 let redoMirroring: boolean = false
 let mirroringInProgress: boolean = false
+let skipIssuesMirroring: boolean = false
 
 const recentlyCreatedIdsObj: Object = {}
 
@@ -116,15 +117,25 @@ export const webhookHandler = {
       return
     }
 
-    // call doSingleEntity one by one issue
-    for (let i = 0; i < allIssues.length; ++i) {
-      const issue = allIssues[i]
+    let areIssuesChanged = false
 
-      log ("Initial mapping".grey, webhookHandler.entityLog (issue))
-      const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
-      if (actionTaken === "created")
-        // setting true to indicate that the mirror has been requested
-        webhookHandler.addToMapping (issue, {waitingForMirror: true})
+    if (skipIssuesMirroring === false) {
+      // call doSingleEntity one by one issue
+      for (let i = 0; i < allIssues.length; ++i) {
+        const issue = allIssues[i]
+
+        log ("Initial mapping".grey, webhookHandler.entityLog (issue))
+        const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
+
+        if (["created", "updated", "deleted"].indexOf (actionTaken) !== -1)
+          areIssuesChanged = true
+
+        if (actionTaken === "created")
+          // setting true to indicate that the mirror has been requested
+          webhookHandler.addToMapping (issue, {waitingForMirror: true})
+      }
+      // once no action has been taken on all issues
+      skipIssuesMirroring = areIssuesChanged === false
     }
 
     if (allIssues.length === 0) {
