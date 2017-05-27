@@ -120,6 +120,7 @@ export const webhookHandler = {
 
     if (shouldAbort) {
       log ("Aborting until webhook".blue)
+      mirroringInProgress = false
       return
     }
 
