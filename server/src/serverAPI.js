@@ -113,7 +113,6 @@ export const webhookHandler = {
     if (issuesWaitingForMirrors.length > 0) {
       log ("Waiting webhook from mirrors of".blue, issuesWaitingForMirrors.map (
         (entityService) => webhookHandler.entityLog (entityService)).join (", "))
-      mirroringInProgress = false
       keepTiming = true
       return
     }
