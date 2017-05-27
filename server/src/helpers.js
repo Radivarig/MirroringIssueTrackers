@@ -8,9 +8,12 @@ export const formatTimestampAsDuration = (ts: number): string =>
 
 export const getIndexAfterLast = (str: string, inStr: string): number => inStr.lastIndexOf (str) + str.length
 
+export const asyncTimeout = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export default {
   throwIfValueNotAllowed,
   formatTimestampAsDuration,
   getIndexAfterLast,
+  asyncTimeout,
 }
 
