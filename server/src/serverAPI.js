@@ -41,11 +41,10 @@ export const webhookHandler = {
   handleRequest: async (service, req, res) => {
     // respond so that youtrack doesn't hang... (opened an issue about it)
     res.send ()
+    const rb = req.body
 
     helpers.throwIfValueNotAllowed (service, services)
-    log ("Webhook from".yellow, service, "action:".yellow, (req.body.action || "").blue)
-
-    const rb = req.body
+    log ("Webhook from".yellow, service, "action:".yellow, (rb.action || "").blue)
 
     if (["labeled", "unlabeled", "deleted", "created", "opened", "reopened", "closed", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
       const issueId: string | void = webhookHandler.getIssueIdFromRequestBody(service, rb)
@@ -98,14 +97,17 @@ export const webhookHandler = {
       }))
     }))
 
-    // sort issue origs first, do ids mapping, get comments
+    // sort issue origs first, do ids mapping
     await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allIssues).map (async (issue) => {
       // mapping sorted issues origs first
-      webhookHandler.addIdToMapping (issue)
+      const isMirror = webhookHandler.getIsOriginal (issue) === false
+      // setting false to indicate that the mirror has been delivered
+      webhookHandler.addToMapping (issue, isMirror ? {waitingForMirror: false} : {})
     }))
 
     const issuesWaitingForMirrors: Array<EntityService> = webhookHandler.getOriginalsWaitingForMirrors ()
 
+    // check if there are originals waiting for mirrors
     if (issuesWaitingForMirrors.length > 0) {
       log ("Waiting webhook from mirrors of".blue, issuesWaitingForMirrors.map (
         (entityService) => webhookHandler.entityLog (entityService)).join (", "))
@@ -114,12 +116,14 @@ export const webhookHandler = {
     }
 
     // call doSingleEntity one by one issue
-    // if created, track id and wait for its mirror
     for (let i = 0; i < allIssues.length; ++i) {
       const issue = allIssues[i]
 
       log ("Initial mapping".grey, webhookHandler.entityLog (issue))
       const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
+      if (actionTaken === "created")
+        // setting true to indicate that the mirror has been requested
+        webhookHandler.addToMapping (issue, {waitingForMirror: true})
     }
 
     return
@@ -144,7 +148,7 @@ export const webhookHandler = {
       // sort comment origs first, do ids mapping
     await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allComments).map (async (comment) => {
         // mapping sorted comments origs first
-      webhookHandler.addIdToMapping (comment)
+      webhookHandler.addToMapping (comment)
     }))
 
       // call doSingleEntity for comments of every issue
@@ -197,12 +201,12 @@ export const webhookHandler = {
         log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity),
           "of".green, webhookHandler.entityLog (entity))
 
-        webhookHandler.updateMirror (entity)
+        await webhookHandler.updateMirror (entity)
         return "updated"
       }
 
       log ("Create mirror of".magenta, webhookHandler.entityLog (entity))
-      webhookHandler.createMirror (entity)
+      await webhookHandler.createMirror (entity)
         // return true to indicate a change that will redo doMapping
       return "created"
     }
@@ -220,7 +224,7 @@ export const webhookHandler = {
 
         // delete
     log ("Deleting mirror".red, webhookHandler.entityLog (entity))
-    webhookHandler.deleteEntity (entity)
+    await webhookHandler.deleteEntity (entity)
         // return to indicate a change that will redo doMapping
     return "deleted"
   },
@@ -276,7 +280,7 @@ export const webhookHandler = {
         */
         const allMirroringQuery = {
           state: "all",
-          labels: "Mirroring",
+          // labels: "Mirroring",
           per_page: 100,
         }
         return await webhookHandler.getProjectIssuesRaw (sourceService, allMirroringQuery)
@@ -309,8 +313,6 @@ export const webhookHandler = {
     .then ((response) => {linksObj = response.links; return response.body})
     .catch ((err) => {throw err})
 
-    console.log ({sourceService, linksObj, rawIssues, restParams})
-
     // embrace forced pagination...
     if (sourceService === "github" && linksObj && linksObj.last) {
       const lastUrl = linksObj.last
@@ -335,7 +337,6 @@ export const webhookHandler = {
         .then ((response) => response.body)
         .catch ((err) => {throw err})
 
-        console.log (url, perPageIssues.length)
         rawIssues.push (...perPageIssues)
       }))
     }
@@ -385,20 +386,14 @@ export const webhookHandler = {
   getIsOriginal: (issueOrComment: Issue | IssueComment): boolean =>
     issueOrComment.body.indexOf (mirrorMetaVarName) === -1,
 
-  addIdToMapping: (entity: Entity) => {
+  addToMapping: (entity: Entity, assign: Object = {}) => {
     // todo, babel typeof..
     const mappings = webhookHandler.getIsComment (entity) ? store.commentMappings : store.issueMappings
 
-    const newEntityService: EntityService = {
-      service: entity.service,
-      id: entity.id,
-      issueId: entity.issueId,
-      body: entity.body,
-    }
     if (webhookHandler.getIsOriginal (entity)) {
-      mappings.add (newEntityService, undefined, {
+      mappings.add (entity, undefined, {
         originalService: entity.service,
-        waitingForMirror: true,
+        ...assign,
       })
     }
     else {
@@ -410,9 +405,9 @@ export const webhookHandler = {
         issueId: meta.issueId,
       }
       // create mapping to original
-      mappings.add (newEntityService, knownEntityService, {
+      mappings.add (entity, knownEntityService, {
         originalService: meta.service,
-        waitingForMirror: false,
+        ...assign,
       })
     }
   },
@@ -539,7 +534,7 @@ export const webhookHandler = {
       preparedOriginal.state === mirrorEntity.state &&
       areLabelsEqual)
 
-    if (!areEqual) log ({preparedOriginal, mirrorEntity, areLabelsEqual})
+    // if (!areEqual) log ({preparedOriginal, mirrorEntity, areLabelsEqual})
 
     return areEqual
   },
@@ -1074,7 +1069,12 @@ export const webhookHandler = {
   },
 
   createMirrorIssue: async (sourceIssue: Issue) => {
-    services.forEach (async (targetService) => {
+    if (sourceIssue.service === "github") {
+      console.log ("temporary disabled gh->yt")
+      return
+    }
+
+    await Promise.all (services.map (async (targetService) => {
       if (targetService === sourceIssue.service)
         return
 
@@ -1089,7 +1089,8 @@ export const webhookHandler = {
           restParams.data = {
             title: preparedIssue.title,
             body: preparedIssue.body,
-            labels: preparedIssue.labels,
+            // github bug, creates multiple same labels
+            // labels: preparedIssue.labels,
           }
           break
         }
@@ -1109,7 +1110,9 @@ export const webhookHandler = {
       await integrationRest (restParams)
       .then ((response) => response.body)
       .catch ((err) => {throw err})
-    })
+
+    }))
+
   },
 
 }
