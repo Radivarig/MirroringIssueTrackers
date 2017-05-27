@@ -126,41 +126,38 @@ export const webhookHandler = {
         webhookHandler.addToMapping (issue, {waitingForMirror: true})
     }
 
-    return
-
     if (allIssues.length === 0) {
       log ("No issues to mirror")
       mirroringInProgress = false
-
     }
 
     // get all comments
     await Promise.all (allIssues.map (async (issue) => {
-        // fetching issue comments
-        // todo take comments from issue
+      // fetching issue comments
+      // todo take comments from issue
       const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
       allComments.push (...issueComments)
 
-        // adding as property to call doSingleEntity for comments at once on all issues
+      // adding as property to call doSingleEntity for comments at once on all issues
       issue.comments = issueComments
     }))
 
-      // sort comment origs first, do ids mapping
+    // sort comment origs first, do ids mapping
     await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allComments).map (async (comment) => {
-        // mapping sorted comments origs first
+      // mapping sorted comments origs first
       webhookHandler.addToMapping (comment)
     }))
 
-      // call doSingleEntity for comments of every issue
+    // call doSingleEntity for comments of every issue
     await Promise.all (allIssues.map (async (issue) => {
       for (let i = 0; i < issue.comments.length; ++i) {
         const comment: IssueComment = issue.comments[i]
-        const r: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
+        const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
 
-        if (["created", "deleted", "updated"].indexOf (r) !== -1)
+        if (["created", "deleted", "updated"].indexOf (actionTaken) !== -1)
           keepTiming = true
 
-        if (r === "created") {
+        if (actionTaken === "created") {
           webhookHandler.logWaitingForWebhook (comment)
           // break for the order of comments, can't add multiple comments on single issue at once
           break
@@ -254,11 +251,11 @@ export const webhookHandler = {
 
   },
 
-  getOriginalsWaitingForMirrors: () => {
-    const waitingIssues = store.issueMappings.mappings
+  getOriginalsWaitingForMirrors: (areComments: boolean = false): Array<EntityService> => {
+    const storeMappings = areComments ? store.commentMappings : store.issueMappings
+    return storeMappings.mappings
     .filter ((f) => f.waitingForMirror)
     .map ((m) => m.services.filter ((f) => f.service === m.originalService)[0])
-    return waitingIssues
   },
 
   getProjectIssues: async (sourceService: string) => {
