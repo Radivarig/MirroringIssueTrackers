@@ -139,7 +139,7 @@ export const webhookHandler = {
 
       log ("Loop on issues completed".grey, "restarting".blue)
       mirroringInProgress = false
-      await webhookHandler.initDoMirroring ()
+      await webhookHandler.doMirroring ()
       return
     }
 
@@ -152,8 +152,10 @@ export const webhookHandler = {
     // get all comments
     await Promise.all (allIssues.map (async (issue) => {
       // fetching issue comments
-      // todo take comments from issue
-      const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue.service, issue.id)
+      let issueComments
+      if (issue.service === "youtrack")
+        issueComments = issue.rawComments.map ((rawComment) => webhookHandler.getFormatedComment (issue.service, rawComment, issue.id))
+      else issueComments = await webhookHandler.getComments (issue.service, issue.id)
       allComments.push (...issueComments)
 
       // adding as property to call doSingleEntity for comments at once on all issues
@@ -187,7 +189,6 @@ export const webhookHandler = {
 
           if (actionTaken === "created") {
             webhookHandler.logWaitingForWebhook (comment)
-            mirroringInProgress = false
             // break for the order of comments, can't add multiple comments on single issue at once
             break
           }
@@ -754,7 +755,7 @@ export const webhookHandler = {
     .then ((response) => response.body)
     .catch ((err) => {throw err})
 
-    if(knownEntityService.service === "youtrack")
+    if (knownEntityService.service === "youtrack")
       rawComment = rawComment.filter ((f) => f.id === knownEntityService.id)[0]
 
     return webhookHandler.getFormatedComment (knownEntityService.service, rawComment, knownEntityService.issueId)
@@ -878,6 +879,7 @@ export const webhookHandler = {
           parentFor,
           subtaskOf,
           state,
+          rawComments: rawIssue.comment,
           tags: rawIssue.tag,
         }
       }
