@@ -90,6 +90,7 @@ export const webhookHandler = {
       const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
 
       console.log ("Issues count", service, projectIssues.length)
+
       // filter
       allIssues.push (...projectIssues.filter ((issue) => {
         const isNotYoutrackBlacklisted = issue.service === "youtrack" && !webhookHandler.getIsIssueBlacklistedByTags (issue)
@@ -170,15 +171,27 @@ export const webhookHandler = {
     await Promise.all (allIssues.map (async (issue) => {
       for (let i = 0; i < issue.comments.length; ++i) {
         const comment: IssueComment = issue.comments[i]
-        const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
 
-        if (["created", "deleted", "updated"].indexOf (actionTaken) !== -1)
-          keepTiming = true
+        const actions = ["created", "deleted", "updated", "skipped_equal"]
 
-        if (actionTaken === "created") {
-          webhookHandler.logWaitingForWebhook (comment)
-          // break for the order of comments, can't add multiple comments on single issue at once
-          break
+        const {lastChange} = webhookHandler.getEntityServiceMapping (comment)
+
+        // skip this if we already made action on this comment
+        if (actions.indexOf (lastChange) !== -1) {
+          log ("Skip already addressed comment".grey, webhookHandler.entityLog (comment), lastChange.grey)
+        }
+        else {
+          const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
+
+          if (actions.indexOf (actionTaken) !== -1)
+            webhookHandler.addToMapping (comment, {lastChange: actionTaken})
+
+          if (actionTaken === "created") {
+            webhookHandler.logWaitingForWebhook (comment)
+            mirroringInProgress = false
+            // break for the order of comments, can't add multiple comments on single issue at once
+            break
+          }
         }
       }
     }))
@@ -274,6 +287,13 @@ export const webhookHandler = {
     return storeMappings.mappings
     .filter ((f) => f.waitingForMirror)
     .map ((m) => m.services.filter ((f) => f.service === m.originalService)[0])
+  },
+
+  getEntityServiceMapping: (entityService: EntityService) => {
+    const storeMappings = webhookHandler.getIsComment (entityService) ? store.
+      commentMappings : store.issueMappings
+    return storeMappings.mappings.filter ((m) =>
+      m.services.filter ((s) => s.service === entityService.service && s.id === entityService.id)[0])[0]
   },
 
   getProjectIssues: async (sourceService: string) => {
@@ -380,7 +400,7 @@ export const webhookHandler = {
   },
 
   getEntityService: (knownEntityService: EntityService, targetService: string): EntityService | void => {
-    const mappings = knownEntityService.issueId ?
+    const mappings = webhookHandler.getIsComment (knownEntityService) ?
       store.commentMappings : store.issueMappings
     return mappings.getEntityService (knownEntityService, targetService)
   },
