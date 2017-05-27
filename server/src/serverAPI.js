@@ -24,7 +24,7 @@ const store = new Store ()
 
 let redoMirroring: boolean = false
 let mirroringInProgress: boolean = false
-let skipIssuesMirroring: boolean = false
+let areIssuesMirrored: boolean = false
 
 const recentlyCreatedIdsObj: Object = {}
 
@@ -119,7 +119,7 @@ export const webhookHandler = {
 
     let areIssuesChanged = false
 
-    if (skipIssuesMirroring === false) {
+    if (areIssuesMirrored === false) {
       // call doSingleEntity one by one issue
       for (let i = 0; i < allIssues.length; ++i) {
         const issue = allIssues[i]
@@ -135,7 +135,12 @@ export const webhookHandler = {
           webhookHandler.addToMapping (issue, {waitingForMirror: true})
       }
       // once no action has been taken on all issues
-      skipIssuesMirroring = areIssuesChanged === false
+      areIssuesMirrored = areIssuesChanged === false
+
+      log ("Loop on issues completed".grey, "restarting".blue)
+      mirroringInProgress = false
+      await webhookHandler.initDoMirroring ()
+      return
     }
 
     if (allIssues.length === 0) {
@@ -181,7 +186,7 @@ export const webhookHandler = {
     mirroringInProgress = false
     if (redoMirroring) {
       log ("Received webhook during last run".grey, "restarting".blue)
-      webhookHandler.initDoMirroring ()
+      await webhookHandler.initDoMirroring ()
     }
     else if (!keepTiming) {
       log ("Done", webhookHandler.getFormatedTimeFromStart ().yellow)
@@ -1015,8 +1020,9 @@ export const webhookHandler = {
       const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
 
       if (!targetIssueService) {
-        log ("solve this error", {comment, targetService})
-        return
+        log ("No comment issue found", {comment, targetService})
+        throw "Error"
+
       }
 
       const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
