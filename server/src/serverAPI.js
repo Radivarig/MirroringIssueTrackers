@@ -525,6 +525,14 @@ export const webhookHandler = {
     return s
   },
 
+  getNameQuote: (entity: Entity, targetService: string): string => {
+    let nameQuote = `<blockquote>@${entity.author}</blockquote>\n\n`
+    switch (targetService) {
+      case "youtrack": nameQuote = `{html}${nameQuote}{html}`
+    }
+    return nameQuote
+  },
+
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
     // todo, switch (issue.service) instead
     let labels = issue.fields || issue.tags ? ["Mirroring"] : undefined
@@ -536,9 +544,10 @@ export const webhookHandler = {
     const hierarchy = webhookHandler.getHierarchyStringBlock (issue)
     const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
 
+    const nameQuote = webhookHandler.getNameQuote (issue, targetService)
     return {
       ...issue,
-      body: issue.body + hierarchy + signature,
+      body: nameQuote + issue.body + hierarchy + signature,
       labels,
     }
   },
@@ -555,8 +564,10 @@ export const webhookHandler = {
 
   getIsOriginalEqualToMirror: (originalEntity: Entity, mirrorEntity: Entity): boolean => {
     const signature = webhookHandler.getMirrorSignature (originalEntity.service, mirrorEntity.service, originalEntity)
+
     if (webhookHandler.getIsComment (originalEntity)) {
-      return originalEntity.body + signature === mirrorEntity.body
+      const nameQuote = webhookHandler.getNameQuote (originalEntity, mirrorEntity.service)
+      return nameQuote + originalEntity.body + signature === mirrorEntity.body
     }
 
     const preparedOriginal: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (originalEntity, mirrorEntity.service)
@@ -681,12 +692,13 @@ export const webhookHandler = {
       if (!targetIssueService || ! targetCommentService)
         return
 
+      const nameQuote = webhookHandler.getNameQuote (comment, targetService)
       const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
 
       const restParams = {
         service: targetService,
       }
-      const commentBody = `${comment.body}${signature}`
+      const commentBody = `${nameQuote}${comment.body}${signature}`
 
       switch (targetService) {
         case "youtrack":
@@ -770,8 +782,14 @@ export const webhookHandler = {
       issueId,
     }
     switch (service) {
-      case "youtrack": body = rawComment.text; break
-      case "github": body = rawComment.body; break
+      case "youtrack":
+        body = rawComment.text
+        formatedComment.author = rawComment.author
+        break
+      case "github":
+        body = rawComment.body
+        formatedComment.author = rawComment.user.login
+        break
     }
 
     // replace \r with \n
@@ -836,6 +854,7 @@ export const webhookHandler = {
         return {
           service,
           id: rawIssue.number.toString(),
+          author: rawIssue.user.login,
           title: rawIssue.title,
           body: normalizeNewline (rawIssue.body),
           labels: uniqueLabels,
@@ -848,12 +867,15 @@ export const webhookHandler = {
         const fields = []
         const parentFor = []
         const subtaskOf = []
+        let author = ""
 
         rawIssue.field.forEach ((f) => {
           if (f.name === "summary")
             title = f.value
           else if (f.name === "description")
             body = normalizeNewline (f.value)
+          else if (f.name === "reporterName")
+            author = f.value
           else if (f.name === "links") {
             f.value.forEach ((l) => {
               if (l.type === "Subtask" && l.role === "subtask of")
@@ -874,6 +896,7 @@ export const webhookHandler = {
         return {
           service,
           id: rawIssue.id,
+          author,
           title,
           body,
           fields,
