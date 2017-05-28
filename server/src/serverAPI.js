@@ -879,7 +879,7 @@ export const webhookHandler = {
           parentFor,
           subtaskOf,
           state,
-          rawComments: rawIssue.comment,
+          rawComments: rawIssue.comment.filter ((c) => !c.deleted),
           tags: rawIssue.tag,
         }
       }
