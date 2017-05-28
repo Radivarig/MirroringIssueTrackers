@@ -175,7 +175,8 @@ export const webhookHandler = {
 
         const actions = ["created", "deleted", "updated", "skipped_equal"]
 
-        const {lastChange} = webhookHandler.getEntityServiceMapping (comment)
+        const commentMapping = webhookHandler.getEntityServiceMapping (comment)
+        const lastChange = commentMapping && commentMapping.lastChange
 
         // skip this if we already made action on this comment
         if (actions.indexOf (lastChange) !== -1) {
