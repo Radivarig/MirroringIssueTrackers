@@ -533,6 +533,15 @@ export const webhookHandler = {
     return nameQuote
   },
 
+  getPreparedMirrorCommentForUpdate: (comment: IssueComment, targetService: string): Entity => {
+    const nameQuote = webhookHandler.getNameQuote (comment, targetService)
+    const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
+    return {
+      ...comment,
+      body: `${nameQuote}${comment.body}${signature}`,
+    }
+  },
+
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
     // todo, switch (issue.service) instead
     let labels = issue.fields || issue.tags ? ["Mirroring"] : undefined
@@ -692,24 +701,22 @@ export const webhookHandler = {
       if (!targetIssueService || ! targetCommentService)
         return
 
-      const nameQuote = webhookHandler.getNameQuote (comment, targetService)
-      const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
+      const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
 
       const restParams = {
         service: targetService,
       }
-      const commentBody = `${nameQuote}${comment.body}${signature}`
 
       switch (targetService) {
         case "youtrack":
           restParams.method = "put"
           restParams.url = `issue/${targetIssueService.id}/comment/${targetCommentService.id}`
-          restParams.data = {text: commentBody}
+          restParams.data = {text: preparedComment.body}
           break
         case "github":
           restParams.method = "patch"
           restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/comments/${targetCommentService.id}`
-          restParams.data = {body: commentBody}
+          restParams.data = {body: preparedComment.body}
           break
       }
 
@@ -1075,7 +1082,7 @@ export const webhookHandler = {
 
       }
 
-      const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
+      const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
 
       const restParams = {
         service: targetService,
@@ -1086,13 +1093,13 @@ export const webhookHandler = {
         case "youtrack":
           restParams.url = `issue/${targetIssueService.id}/execute`
           restParams.query = {
-            comment: `${comment.body}${signature}`,
+            comment: preparedComment.body,
           }
           break
         case "github":
           restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
           restParams.data = {
-            body: `${comment.body}${signature}`,
+            body: preparedComment.body,
           }
           break
       }
