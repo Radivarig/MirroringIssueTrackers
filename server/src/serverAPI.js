@@ -249,7 +249,7 @@ export const webhookHandler = {
 
     mirroringInProgress = false
     if (redoMirroring) {
-      log ("Received webhook during last run".grey, "restarting".blue)
+      log ("Received webhook during last run".grey, "restarting".cyan)
       return await webhookHandler.initDoMirroring ()
     }
     else if (!keepTiming) {
@@ -556,15 +556,13 @@ export const webhookHandler = {
     if (!issue.tags)
       return false
 
-    const issueTags: Array<string> = issue.tags.map ((t) => t.value)
-
       // if tags contain force mirroring tag
-    if (issueTags.indexOf (forceMirroringTag) !== -1)
+    if (issue.tags.indexOf (forceMirroringTag) !== -1)
       return false
 
       // if intersection
-    for (let i = 0; i < issueTags.length; ++i) {
-      const tag: string = issueTags[i]
+    for (let i = 0; i < issue.tags.length; ++i) {
+      const tag: string = issue.tags[i]
 
       if (settings.mirroringBlacklistTags.indexOf (tag) !== -1) {
         log ("Issue is blacklisted for mirroring".grey, webhookHandler.entityLog (issue))
@@ -924,7 +922,7 @@ export const webhookHandler = {
   getLabelsFromTags: (tags/*: Array<{name: string, value: string}>*/): Array<string> =>
     tags.map ((tag) =>
       // add here handles for field.specialAttr
-       `Tag:${tag.value}`),
+       `Tag:${tag}`),
 
   getLabelsFromFields: (fields/*: Array<{name: string, value: string}>*/): Array<string> =>
     fields.map ((field) =>
@@ -997,7 +995,7 @@ export const webhookHandler = {
           subtaskOf,
           state,
           rawComments: rawIssue.comment.filter ((c) => !c.deleted),
-          tags: rawIssue.tag,
+          tags: rawIssue.tag.map ((t) => t.value),
         }
       }
     }
