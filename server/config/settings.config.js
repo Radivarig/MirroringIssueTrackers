@@ -24,11 +24,9 @@ export default {
   // note: tags are lowercase
   mirroringBlacklistTags: [
     "topsecret",
-    "verysecurity",
-    "muchpasswords",
-    "suchcrypto",
   ],
 
+  // note: case isensitive
   sensitiveStrings: [
     "password",
     "auth",
