@@ -647,6 +647,13 @@ export const webhookHandler = {
     }
   },
 
+  getTitlePrefix: (issue: Issue, targetService): string => {
+    switch (targetService) {
+      case "github": return `[${issue.id}] `
+      case "youtrack": return ""
+    }
+  },
+
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
     // todo, switch (issue.service) instead
     let labels = issue.fields || issue.tags ? ["Mirroring"] : undefined
@@ -659,8 +666,12 @@ export const webhookHandler = {
     const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
 
     const nameQuote = webhookHandler.getNameQuote (issue, targetService)
+
+    const titlePrefix = webhookHandler.getTitlePrefix (issue, targetService)
+
     return {
       ...issue,
+      title: titlePrefix + issue.title,
       body: nameQuote + issue.body + hierarchy + signature,
       labels,
     }
