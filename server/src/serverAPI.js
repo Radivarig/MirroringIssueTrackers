@@ -39,8 +39,8 @@ const services = ["github", "youtrack"]
 const log = (...args) => {
   // skip lines containing with
   if (true // eslint-disable-line no-constant-condition
-    && args[0].indexOf ("Skip") === -1
-    && args[0].indexOf ("Initial") === -1
+    // && args[0].indexOf ("Skip") === -1
+    // && args[0].indexOf ("Initial") === -1
     // args[0].indexOf ("Processing") === -1
   )
     console.log(...args) // eslint-disable-line no-console
@@ -238,8 +238,13 @@ export const webhookHandler = {
       webhookHandler.addToMapping (comment)
     }))
 
+    // temporarily commented
+    // await Promise.all (allIssues.map (async (issue) => {
+
     // call doSingleEntity for comments of every issue
-    await Promise.all (allIssues.map (async (issue) => {
+    for (let j = 0; j < allIssues.length; ++j) {
+      const issue = allIssues[j]
+
       for (let i = 0; i < issue.comments.length; ++i) {
         const comment: IssueComment = issue.comments[i]
 
@@ -261,25 +266,29 @@ export const webhookHandler = {
         if (lastActions.indexOf (actionTaken) !== -1)
           webhookHandler.addToMapping (comment, {lastAction: actionTaken})
 
+        /*
         if (["created", "deleted"].indexOf (actionTaken) !== -1) {
-          keepTiming = true
           // move log to after promise.all
           // log ("Comment action made".blue, webhookHandler.entityLog (comment).yellow, actionTaken.grey, "waiting".cyan)
 
-          // break for the order of comments, can't add multiple comments on single issue at once
+          keepTiming = true
+          // break for the order of comments, check that the comment is there
           break
         }
+        */
       }
-    }))
+    }
 
     mirroringInProgress = false
     if (redoMirroring) {
+      // keepTiming = true //todo
       log ("Received webhook during last run".grey, "restarting".cyan)
       return await webhookHandler.initDoMirroring ()
     }
     else if (!keepTiming) {
       // if no webhook triggered in the meantime
       if (redoWasChanged) {
+        // keepTiming = true //todo
         log ("Possible changes due webhooks", "restarting".cyan)
         redoWasChanged = false
         store = new Store ()
