@@ -174,8 +174,10 @@ export const webhookHandler = {
 
     // call doSingleEntity one by one issue
     // todo sort mirrors first to proritize removing deleted issues
-    for (let i = 0; i < allIssues.length; ++i) {
-      const issue = allIssues[i]
+    const allIssuesMirrorsFirst = webhookHandler.getEntitiesWithOriginalsFirst (allIssues).reverse()
+
+    for (let i = 0; i < allIssuesMirrorsFirst.length; ++i) {
+      const issue = allIssuesMirrorsFirst[i]
 
       const issueMapping = webhookHandler.getEntityServiceMapping (issue)
       const lastAction = issueMapping && issueMapping.lastAction
