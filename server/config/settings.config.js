@@ -31,4 +31,10 @@ export default {
 
   forceMirroringTag: "forcemirroring",
 
+  sensitiveStrings: [
+    "password",
+    "auth",
+    "security",
+  ],
+
 }

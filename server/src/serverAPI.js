@@ -89,13 +89,14 @@ export const webhookHandler = {
     await Promise.all (services.map (async (service) => {
       const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
 
-      console.log ("Issues count", service, projectIssues.length)
+      log ("Issues count", service, projectIssues.length)
 
       // filter
       allIssues.push (...projectIssues.filter ((issue) => {
+        const isNotSensitive = issue.service === "youtrack" && !webhookHandler.getEntityContainsSensitiveInfo (issue)
         const isNotYoutrackBlacklisted = issue.service === "youtrack" && !webhookHandler.getIsIssueBlacklistedByTags (issue)
         const isNotNonYoutrackOriginal = issue.service !== "youtrack" && !webhookHandler.getIsOriginal (issue)
-        return isNotYoutrackBlacklisted || isNotNonYoutrackOriginal
+        return ((isNotSensitive && isNotYoutrackBlacklisted) || isNotNonYoutrackOriginal)
       }))
     }))
 
@@ -463,6 +464,16 @@ export const webhookHandler = {
   getFormatedTimeFromStart: (): string => {
     const dt = (new Date().getTime () - startTime) / 1000
     return helpers.formatTimestampAsDuration (dt)
+  },
+
+  getEntityContainsSensitiveInfo: (entity: Entity): boolean => {
+    for (let i = 0; i < settings.sensitiveStrings.length; ++i) {
+      const str = settings.sensitiveStrings[i]
+      if (entity.body.indexOf (str) !== -1) {
+        log ("Issue contains sensitive info, omitting".red, str, webhookHandler.entityLog (entity))
+        return true
+      }
+    }
   },
 
   getIsIssueBlacklistedByTags: (issue: Issue): boolean => {
@@ -1143,7 +1154,7 @@ export const webhookHandler = {
 
   createMirrorIssue: async (sourceIssue: Issue) => {
     if (sourceIssue.service === "github") {
-      console.log ("temporary disabled gh->yt")
+      log ("temporary disabled gh->yt")
       return
     }
 
