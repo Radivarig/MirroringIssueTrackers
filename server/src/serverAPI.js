@@ -48,8 +48,12 @@ const log = (...args) => {
 
 export const webhookHandler = {
   handleRequest: async (service, req, res) => {
-    // respond so that youtrack doesn't hang... (opened an issue about it)
-    res.send ()
+    if (service === "youtrack") {
+      // respond so that youtrack doesn't hang... (opened an issue about it)
+      res.send ()
+      // give youtrack time to receive res.send()...
+      await helpers.asyncTimeout (1000)
+    }
 
     const rb = req.body
 
