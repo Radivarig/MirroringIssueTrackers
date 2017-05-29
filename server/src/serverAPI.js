@@ -207,7 +207,7 @@ export const webhookHandler = {
     }
 
     if (areIssuesChanged) {
-      log ("Issue actions taken,".grey, "restarting".cyan)
+      log ("Issue actions made".grey, "restarting".cyan)
       mirroringInProgress = false
       await webhookHandler.doMirroring ()
       return
@@ -261,9 +261,10 @@ export const webhookHandler = {
         if (lastActions.indexOf (actionTaken) !== -1)
           webhookHandler.addToMapping (comment, {lastAction: actionTaken})
 
-        if (actionTaken === "created") {
+        if (["created", "deleted"].indexOf (actionTaken) !== -1) {
           keepTiming = true
-          log ("Waiting for webhook after action related to".blue, webhookHandler.entityLog (comment).yellow)
+          // move log to after promise.all
+          // log ("Comment action made".blue, webhookHandler.entityLog (comment).yellow, actionTaken.grey, "waiting".cyan)
 
           // break for the order of comments, can't add multiple comments on single issue at once
           break
