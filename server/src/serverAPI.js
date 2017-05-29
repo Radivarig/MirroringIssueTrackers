@@ -24,7 +24,6 @@ const store = new Store ()
 
 let redoMirroring: boolean = false
 let mirroringInProgress: boolean = false
-let areIssuesMirrored: boolean = false
 
 const recentlyCreatedIdsObj: Object = {}
 
@@ -35,7 +34,13 @@ const mirrorMetaVarName = "MIRROR_META"
 const services = ["github", "youtrack"]
 
 const log = (...args) => {
-  console.log(...args) // eslint-disable-line no-console
+  // skip lines containing with
+  if (true // eslint-disable-line no-constant-condition
+    && args[0].indexOf ("Skip") === -1
+    && args[0].indexOf ("Initial") === -1
+    // args[0].indexOf ("Processing") === -1
+  )
+    console.log(...args) // eslint-disable-line no-console
 }
 
 export const webhookHandler = {
@@ -91,13 +96,35 @@ export const webhookHandler = {
 
       log ("Issues count", service, projectIssues.length)
 
-      // filter
-      allIssues.push (...projectIssues.filter ((issue) => {
-        const isNotSensitive = issue.service === "youtrack" && !webhookHandler.getEntityContainsSensitiveInfo (issue)
-        const isNotYoutrackBlacklisted = issue.service === "youtrack" && !webhookHandler.getIsIssueBlacklistedByTags (issue)
-        const isNotNonYoutrackOriginal = issue.service !== "youtrack" && !webhookHandler.getIsOriginal (issue)
-        return ((isNotSensitive && isNotYoutrackBlacklisted) || isNotNonYoutrackOriginal)
-      }))
+      let filteredIssues
+
+      switch (service) {
+        case "youtrack": {
+
+          filteredIssues = projectIssues.filter ((issue) => {
+            const isSensitive = webhookHandler.getEntityContainsSensitiveInfo (issue)
+            const isYoutrackBlacklisted = webhookHandler.getIsIssueBlacklistedByTags (issue)
+            const isYoutrackOriginal = webhookHandler.getIsOriginal (issue)
+            // TODO add isSensitive check for issue.tags.indexOf (settings.forceMirroringTag)
+            return  ((!isSensitive && !isYoutrackBlacklisted) || !isYoutrackOriginal)
+          })
+          break
+        }
+        case "github": {
+          filteredIssues = projectIssues.filter ((issue) => {
+            if (webhookHandler.getIsOriginal (issue))
+              return true
+
+            const meta = webhookHandler.getMeta (issue)
+            return !meta.deleted
+          })
+        }
+          break
+      }
+
+      log ("Filtered issues count", service, filteredIssues.length)
+
+      allIssues.push (...filteredIssues)
     }))
 
     // sort issue origs first, do ids mapping
@@ -105,6 +132,8 @@ export const webhookHandler = {
       // mapping sorted issues origs first
       const isMirror = webhookHandler.getIsOriginal (issue) === false
       // setting false to indicate that the mirror has been delivered
+      log ("Initial mapping".grey, webhookHandler.entityLog (issue), isMirror ? "(mirror)".grey : "")
+
       webhookHandler.addToMapping (issue, isMirror ? {waitingForMirror: false} : {})
     }))
 
@@ -115,30 +144,44 @@ export const webhookHandler = {
       log ("Waiting webhook from mirrors of".blue, issuesWaitingForMirrors.map (
         (entityService) => webhookHandler.entityLog (entityService)).join (", "))
       keepTiming = true
-      return
+
     }
 
     let areIssuesChanged = false
 
-    if (areIssuesMirrored === false) {
-      // call doSingleEntity one by one issue
-      for (let i = 0; i < allIssues.length; ++i) {
-        const issue = allIssues[i]
+    // call doSingleEntity one by one issue
+    for (let i = 0; i < allIssues.length; ++i) {
+      const issue = allIssues[i]
 
-        log ("Initial mapping".grey, webhookHandler.entityLog (issue))
-        const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
+      const issueMapping = webhookHandler.getEntityServiceMapping (issue)
+      const lastAction = issueMapping && issueMapping.lastAction
 
-        if (["created", "updated", "deleted"].indexOf (actionTaken) !== -1)
-          areIssuesChanged = true
-
-        if (actionTaken === "created")
-          // setting true to indicate that the mirror has been requested
-          webhookHandler.addToMapping (issue, {waitingForMirror: true})
+      if (lastAction === "deleted") {
+        console.log ("removing mapping", issue.id, issue.service)
+        store.removeMappingContaining (issue)
       }
-      // once no action has been taken on all issues
-      areIssuesMirrored = areIssuesChanged === false
+      else if (lastAction === "skipped_equal") {
+        log ("Skip already addressed issue".grey, webhookHandler.entityLog (issue), lastAction.grey)
+        continue
+      }
 
-      log ("Loop on issues completed".grey, "restarting".blue)
+      log ("Processing issue".grey, webhookHandler.entityLog (issue))
+      const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
+
+      if (["created", "updated", "deleted"].indexOf (actionTaken) !== -1)
+        areIssuesChanged = true
+
+      // todo, refactor lastAction
+      if (areIssuesChanged || actionTaken === "skipped_equal")
+        webhookHandler.addToMapping (issue, {lastAction: actionTaken})
+
+      if (actionTaken === "created")
+        // setting true to indicate that the mirror has been requested
+        webhookHandler.addToMapping (issue, {waitingForMirror: true})
+    }
+
+    if (areIssuesChanged) {
+      log ("Issue actions taken,".grey, "restarting".cyan)
       mirroringInProgress = false
       await webhookHandler.doMirroring ()
       return
@@ -174,26 +217,28 @@ export const webhookHandler = {
       for (let i = 0; i < issue.comments.length; ++i) {
         const comment: IssueComment = issue.comments[i]
 
-        const actions = ["created", "deleted", "updated", "skipped_equal"]
+        const lastActions = ["created", "deleted", "updated", "skipped_equal"]
 
         const commentMapping = webhookHandler.getEntityServiceMapping (comment)
-        const lastChange = commentMapping && commentMapping.lastChange
+        const lastAction = commentMapping && commentMapping.lastAction
 
-        // skip this if we already made action on this comment
-        if (actions.indexOf (lastChange) !== -1) {
-          log ("Skip already addressed comment".grey, webhookHandler.entityLog (comment), lastChange.grey)
+        if (lastAction === "deleted") {
+          webhookHandler.removeMappingContaining (comment)
         }
-        else {
-          const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
+        else if (lastAction === "skipped_equal") {
+          log ("Skip already addressed comment".grey, webhookHandler.entityLog (comment), lastAction.grey)
+          continue
+        }
 
-          if (actions.indexOf (actionTaken) !== -1)
-            webhookHandler.addToMapping (comment, {lastChange: actionTaken})
+        const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
 
-          if (actionTaken === "created") {
-            webhookHandler.logWaitingForWebhook (comment)
-            // break for the order of comments, can't add multiple comments on single issue at once
-            break
-          }
+        if (lastActions.indexOf (actionTaken) !== -1)
+          webhookHandler.addToMapping (comment, {lastAction: actionTaken})
+
+        if (actionTaken === "created") {
+          webhookHandler.logWaitingForWebhook (comment)
+          // break for the order of comments, can't add multiple comments on single issue at once
+          break
         }
       }
     }))
@@ -281,6 +326,13 @@ export const webhookHandler = {
         throw `Timeout${webhookHandler.getFormatedTimeFromStart ()}`
     }, 30000)
     */
+
+  },
+
+  removeMappingContaining: (knownEntityService: EntityService) => {
+    if (webhookHandler.getIsComment (knownEntityService))
+      store.commentMappings.removeMappingContaining (knownEntityService)
+    else store.issueMappings.removeMappingContaining (knownEntityService)
 
   },
 
@@ -436,6 +488,11 @@ export const webhookHandler = {
     else {
       const meta = webhookHandler.getMeta (entity)
 
+      if (!meta.service || !meta.id) {
+        console.log ("no meta found", entity)
+        return
+      }
+
       const knownEntityService: EntityService = {
         service: meta.service,
         id: meta.id,
@@ -467,6 +524,7 @@ export const webhookHandler = {
   },
 
   getEntityContainsSensitiveInfo: (entity: Entity): boolean => {
+    // todo toLowerCase()
     for (let i = 0; i < settings.sensitiveStrings.length; ++i) {
       const str = settings.sensitiveStrings[i]
       if (entity.body.indexOf (str) !== -1) {

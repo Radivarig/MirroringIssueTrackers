@@ -21,15 +21,13 @@ export class Mapping {
     }
   }
 
-/*
-  remove (opts) {
-    const knownKey: string = opts.knownKey
-    const {knownValue} = opts
-
-    // remove known mapping
-    this.mappings = this.mappings.filter ((m) => m[knownKey] !== knownValue)
+  removeMappingContaining (knownEntityService: EntityService) {
+    this.mappings = this.mappings.filter ((m) => {
+      const mappingContainsKnownService = m.services.filter (
+        (s) => s.id === knownEntityService.id && s.value === knownEntityService.value)[0] !== undefined
+      return !mappingContainsKnownService
+    })
   }
-*/
 
   add (newEntityService: EntityService, knownEntityService: EntityService | void, assignToMapping: Object = {}) {
     for (let i = 0; i < this.mappings.length; ++i) {
