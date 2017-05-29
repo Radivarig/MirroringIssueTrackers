@@ -324,8 +324,8 @@ export const webhookHandler = {
     }
   },
 
-  composeYoutrackId: (id: string): string => `${auth.youtrack.project}-${id}`,
-  extractYoutrackId: (fullId: string): string => fullId.split("-")[1],
+  //composeYoutrackId: (id: string): string => `${auth.youtrack.project}-${id}`,
+  //extractYoutrackId: (fullId: string): string => fullId.split("-")[1],
 
   getProjectIssuesRaw: async (sourceService: string, query: Object | void) => {
     const restParams = {
@@ -930,6 +930,8 @@ export const webhookHandler = {
     if (!metaRaw)
       return
 
+    return metaRaw
+    /*
     // reattach youtrack project prefix
     if (metaRaw.id && metaRaw.service === "youtrack") {
       // only for issue.id and comment.issueId
@@ -939,6 +941,7 @@ export const webhookHandler = {
       else metaRaw.id = webhookHandler.composeYoutrackId (metaRaw.id)
     }
     return metaRaw
+    */
   },
 
   getMetaRaw: (entity: Entity): Object | void => {
@@ -953,9 +956,10 @@ export const webhookHandler = {
   // todo, remove source service, use entity.service
   getMirrorSignature: (sourceService, targetService, entity: Entity): string => {
     // remove youtrack issue prefix as it's changable
-    let {id, issueId} = entity
+    const {id, issueId} = entity
 
     // if service is youtrack
+    /*
     if (entity.service === "youtrack") {
       // if is comment
       if (entity.issueId)
@@ -963,6 +967,7 @@ export const webhookHandler = {
       // else it is issue
       else id = webhookHandler.extractYoutrackId (entity.id)
     }
+  */
 
     const entityMetaData = {
       service: sourceService,
