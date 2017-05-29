@@ -84,6 +84,9 @@ export const webhookHandler = {
   // call doSingleEntity for each issue,
   // for each issue, call doSingleEntity for all comments.
   doMirroring: async () => {
+    // wait to reduce frequency of requests.. github will return Forbidden
+    await helpers.asyncTimeout (1000)
+
     if (mirroringInProgress) {
       redoMirroring = true
       redoWasChanged = true
@@ -170,6 +173,7 @@ export const webhookHandler = {
     let areIssuesChanged = false
 
     // call doSingleEntity one by one issue
+    // todo sort mirrors first to proritize removing deleted issues
     for (let i = 0; i < allIssues.length; ++i) {
       const issue = allIssues[i]
 
@@ -256,7 +260,9 @@ export const webhookHandler = {
           webhookHandler.addToMapping (comment, {lastAction: actionTaken})
 
         if (actionTaken === "created") {
-          webhookHandler.logWaitingForWebhook (comment)
+          keepTiming = true
+          log ("Waiting for webhook after action related to".blue, webhookHandler.entityLog (comment).yellow)
+
           // break for the order of comments, can't add multiple comments on single issue at once
           break
         }
@@ -348,19 +354,6 @@ export const webhookHandler = {
       else mirrors.push (entity)
     })
     return originals.concat (mirrors)
-  },
-
-  logWaitingForWebhook: (entity: Entity) => {
-    keepTiming = true
-    log ("Waiting for webhook after action related to".blue, webhookHandler.entityLog (entity).yellow)
-    /*
-    gotWebhook = false
-    setTimeout (() => {
-      if (gotWebhook === false)
-        throw `Timeout${webhookHandler.getFormatedTimeFromStart ()}`
-    }, 30000)
-    */
-
   },
 
   removeMappingContaining: (knownEntityService: EntityService) => {
