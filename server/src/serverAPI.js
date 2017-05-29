@@ -1020,7 +1020,7 @@ export const webhookHandler = {
       case "github": return rawIssue.state
       case "youtrack": {
         const stateFromField: string = rawIssue.field.filter ((f) => f.name === "State")[0].value[0]
-        const a = settings.closedStateFields.indexOf (stateFromField) !== -1
+        const a = settings.closedFieldStateValues.indexOf (stateFromField) !== -1
         return a ? "closed" : "open"
       }
     }

@@ -6,7 +6,7 @@ export default {
   ],
 
   // note: field values are case sensitive
-  closedStateFields: [
+  closedFieldStateValues: [
     "Done",
     "Aborted",
     "Duplicate",
