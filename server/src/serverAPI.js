@@ -31,7 +31,9 @@ const recentlyCreatedIdsObj: Object = {}
 let startTime
 let keepTiming
 
+// do not change!
 const mirrorMetaVarName = "MIRROR_META"
+const forceMirroringTag = "forcemirroring"
 const services = ["github", "youtrack"]
 
 const log = (...args) => {
@@ -107,7 +109,7 @@ export const webhookHandler = {
             const isSensitive = webhookHandler.getEntityContainsSensitiveInfo (issue)
             const isYoutrackBlacklisted = webhookHandler.getIsIssueBlacklistedByTags (issue)
             const isYoutrackOriginal = webhookHandler.getIsOriginal (issue)
-            // TODO add isSensitive check for issue.tags.indexOf (settings.forceMirroringTag)
+            // TODO add isSensitive check for issue.tags.indexOf (forceMirroringTag)
             return  ((!isSensitive && !isYoutrackBlacklisted) || !isYoutrackOriginal)
           })
           break
@@ -557,7 +559,7 @@ export const webhookHandler = {
     const issueTags: Array<string> = issue.tags.map ((t) => t.value)
 
       // if tags contain force mirroring tag
-    if (issueTags.indexOf (settings.forceMirroringTag) !== -1)
+    if (issueTags.indexOf (forceMirroringTag) !== -1)
       return false
 
       // if intersection

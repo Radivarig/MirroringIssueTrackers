@@ -29,8 +29,6 @@ export default {
     "suchcrypto",
   ],
 
-  forceMirroringTag: "forcemirroring",
-
   sensitiveStrings: [
     "password",
     "auth",
