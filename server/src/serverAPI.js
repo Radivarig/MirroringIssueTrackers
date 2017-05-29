@@ -33,7 +33,7 @@ let keepTiming
 
 // do not change!
 const mirrorMetaVarName = "MIRROR_META"
-const forceMirroringTag = "forcemirroring"
+const forceMirroringTag = "forcemirror"
 const services = ["github", "youtrack"]
 
 const log = (...args) => {
@@ -50,6 +50,7 @@ export const webhookHandler = {
   handleRequest: async (service, req, res) => {
     // respond so that youtrack doesn't hang... (opened an issue about it)
     res.send ()
+
     const rb = req.body
 
     helpers.throwIfValueNotAllowed (service, services)
@@ -104,13 +105,24 @@ export const webhookHandler = {
 
       switch (service) {
         case "youtrack": {
-
           filteredIssues = projectIssues.filter ((issue) => {
-            const isSensitive = webhookHandler.getEntityContainsSensitiveInfo (issue)
+            const isOriginal = webhookHandler.getIsOriginal (issue)
+            if (isOriginal === false)
+              return true
+
+            const hasForceMirroringTag = issue.tags && issue.tags.indexOf (forceMirroringTag) !== -1
+            if (hasForceMirroringTag)
+              return true
+
             const isYoutrackBlacklisted = webhookHandler.getIsIssueBlacklistedByTags (issue)
-            const isYoutrackOriginal = webhookHandler.getIsOriginal (issue)
-            // TODO add isSensitive check for issue.tags.indexOf (forceMirroringTag)
-            return  ((!isSensitive && !isYoutrackBlacklisted) || !isYoutrackOriginal)
+            if (isYoutrackBlacklisted)
+              return false
+
+            const isSensitive = webhookHandler.getEntityContainsSensitiveInfo (issue)
+            if (isSensitive)
+              return false
+
+            return true
           })
           break
         }
