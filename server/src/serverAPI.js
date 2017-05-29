@@ -540,10 +540,9 @@ export const webhookHandler = {
   },
 
   getEntityContainsSensitiveInfo: (entity: Entity): boolean => {
-    // todo toLowerCase()
     for (let i = 0; i < settings.sensitiveStrings.length; ++i) {
       const str = settings.sensitiveStrings[i]
-      if (entity.body.indexOf (str) !== -1) {
+      if (entity.body.toLowerCase ().indexOf (str.toLowerCase ()) !== -1) {
         log ("Issue contains sensitive info, omitting".red, str, webhookHandler.entityLog (entity))
         return true
       }
