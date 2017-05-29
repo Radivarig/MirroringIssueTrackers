@@ -20,9 +20,10 @@ const auth: AuthConfig = require ("../config/auth.config").default
 import settings from "../config/settings.config"
 
 import Store from './Store'
-const store = new Store ()
+let store = new Store ()
 
 let redoMirroring: boolean = false
+let redoWasChanged: boolean = false
 let mirroringInProgress: boolean = false
 
 const recentlyCreatedIdsObj: Object = {}
@@ -78,6 +79,7 @@ export const webhookHandler = {
   doMirroring: async () => {
     if (mirroringInProgress) {
       redoMirroring = true
+      redoWasChanged = true
       return
     }
 
@@ -246,11 +248,25 @@ export const webhookHandler = {
     mirroringInProgress = false
     if (redoMirroring) {
       log ("Received webhook during last run".grey, "restarting".blue)
-      await webhookHandler.initDoMirroring ()
+      return await webhookHandler.initDoMirroring ()
     }
     else if (!keepTiming) {
+      // if no webhook triggered in the meantime
+      if (redoWasChanged) {
+        log ("Possible changes due webhooks", "restarting".cyan)
+        redoWasChanged = false
+        store = new Store ()
+        return await webhookHandler.initDoMirroring ()
+      }
+
       log ("Done", webhookHandler.getFormatedTimeFromStart ().yellow)
       startTime = undefined
+
+      log ("Continue listening for changes".cyan)
+      store = new Store ()
+    }
+    else {
+      // timeout?
     }
   },
 
