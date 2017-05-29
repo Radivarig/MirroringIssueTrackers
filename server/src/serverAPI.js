@@ -437,9 +437,12 @@ export const webhookHandler = {
     }
 
     let linksObj
-    const rawIssues = await integrationRest (restParams)
+    let rawIssues = await integrationRest (restParams)
     .then ((response) => {linksObj = response.links; return response.body})
     .catch ((err) => {throw err})
+
+    if (sourceService === "github")
+      rawIssues = rawIssues.filter ((ri) => !ri.pull_request)
 
     // embrace forced pagination...
     if (sourceService === "github" && linksObj && linksObj.last) {
@@ -470,6 +473,7 @@ export const webhookHandler = {
     }
 
     const issues = []
+
     for (let i = 0; i < rawIssues.length; ++i) {
       const rawIssue = rawIssues[i]
       issues.push (webhookHandler.getFormatedIssue (sourceService, rawIssue))
