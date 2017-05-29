@@ -186,7 +186,7 @@ export const webhookHandler = {
         console.log ("removing mapping", issue.id, issue.service)
         store.removeMappingContaining (issue)
       }
-      else if (lastAction === "skipped_equal") {
+      else if (["updated", "skipped_equal"].indexOf (lastAction) !== -1) {
         log ("Skip already addressed issue".grey, webhookHandler.entityLog (issue), lastAction.grey)
         continue
       }
@@ -256,7 +256,8 @@ export const webhookHandler = {
         if (lastAction === "deleted") {
           webhookHandler.removeMappingContaining (comment)
         }
-        else if (lastAction === "skipped_equal") {
+        else if (["created", "updated", "skipped_equal"].indexOf (lastAction) !== -1) {
+        // else if (lastAction === "skipped_equal") {
           log ("Skip already addressed comment".grey, webhookHandler.entityLog (comment), lastAction.grey)
           continue
         }
