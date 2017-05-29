@@ -152,11 +152,11 @@ export const webhookHandler = {
 
     // sort issue origs first, do ids mapping
     await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allIssues).map (async (issue) => {
-      // mapping sorted issues origs first
-      const isMirror = webhookHandler.getIsOriginal (issue) === false
-      // setting false to indicate that the mirror has been delivered
-      log ("Initial mapping".grey, webhookHandler.entityLog (issue), isMirror ? "(mirror)".grey : "")
+      log ("Initial mapping".grey, webhookHandler.entityLog (issue))
 
+      const isMirror = webhookHandler.getIsOriginal (issue) === false
+      // mapping sorted issues origs first
+      // setting false to indicate that the mirror has been delivered
       webhookHandler.addToMapping (issue, isMirror ? {waitingForMirror: false} : {})
     }))
 
@@ -696,6 +696,8 @@ export const webhookHandler = {
     parts.push (entityService.id.yellow)
     if (webhookHandler.getIsComment (entityService))
       parts.push ("(comment)".grey)
+    if (!webhookHandler.getIsOriginal (entityService))
+      parts.push ("(mirror)".grey)
     return parts.join (" ")
   },
 
