@@ -647,9 +647,13 @@ export const webhookHandler = {
   getPreparedMirrorCommentForUpdate: (comment: IssueComment, targetService: string): Entity => {
     const nameQuote = webhookHandler.getNameQuote (comment, targetService)
     const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
+
+    const convertedBody =
+      webhookHandler.convertMentions (nameQuote + comment.body, targetService)
+
     return {
       ...comment,
-      body: `${nameQuote}${comment.body}${signature}`,
+      body: convertedBody + signature,
     }
   },
 
@@ -658,6 +662,16 @@ export const webhookHandler = {
       case "github": return `[${issue.id}] `
       case "youtrack": return ""
     }
+  },
+
+  convertMentions (body: string, targetService: string): string {
+    return body.replace (/\B@/ig, ((match) => "@'"))
+  },
+
+  getPreparedMirrorEntityForUpdate: (entity: Entity, targetService: string): Entity => {
+    if (webhookHandler.getIsComment (entity))
+      return webhookHandler.getPreparedMirrorCommentForUpdate (entity, targetService)
+    return webhookHandler.getPreparedMirrorIssueForUpdate (entity, targetService)
   },
 
   getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
@@ -672,13 +686,14 @@ export const webhookHandler = {
     const signature = webhookHandler.getMirrorSignature (issue.service, targetService, issue)
 
     const nameQuote = webhookHandler.getNameQuote (issue, targetService)
-
     const titlePrefix = webhookHandler.getTitlePrefix (issue, targetService)
+
+    const convertedBody = webhookHandler.convertMentions (nameQuote + issue.body, targetService)
 
     return {
       ...issue,
       title: titlePrefix + issue.title,
-      body: nameQuote + issue.body + hierarchy + signature,
+      body: convertedBody + hierarchy + signature,
       labels,
     }
   },
@@ -694,15 +709,13 @@ export const webhookHandler = {
     ),
 
   getIsOriginalEqualToMirror: (originalEntity: Entity, mirrorEntity: Entity): boolean => {
-    const signature = webhookHandler.getMirrorSignature (originalEntity.service, mirrorEntity.service, originalEntity)
+    const preparedOriginal: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (originalEntity, mirrorEntity.service)
 
-    if (webhookHandler.getIsComment (originalEntity)) {
-      const nameQuote = webhookHandler.getNameQuote (originalEntity, mirrorEntity.service)
-      return nameQuote + originalEntity.body + signature === mirrorEntity.body
-    }
+    // comment
+    if (webhookHandler.getIsComment (originalEntity))
+      return preparedOriginal.body === mirrorEntity.body
 
-    const preparedOriginal: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (originalEntity, mirrorEntity.service)
-
+    // issue
     const areLabelsEqual = webhookHandler.doListsContainSameElements (
       preparedOriginal.labels || [], mirrorEntity.labels || [])
 
