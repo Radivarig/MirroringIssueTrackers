@@ -284,6 +284,7 @@ export const webhookHandler = {
     if (redoMirroring) {
       // keepTiming = true //todo
       log ("Received webhook during last run".grey, "restarting".cyan)
+      redoWasChanged = false
       return await webhookHandler.initDoMirroring ()
     }
     else if (!keepTiming) {
