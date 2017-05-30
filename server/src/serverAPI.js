@@ -443,9 +443,6 @@ export const webhookHandler = {
     .then ((response) => {linksObj = response.links; return response.body})
     .catch ((err) => {throw err})
 
-    if (sourceService === "github")
-      rawIssues = rawIssues.filter ((ri) => !ri.pull_request)
-
     // embrace forced pagination...
     if (sourceService === "github" && linksObj && linksObj.last) {
       const lastUrl = linksObj.last
@@ -473,6 +470,9 @@ export const webhookHandler = {
         rawIssues.push (...perPageIssues)
       }))
     }
+
+    if (sourceService === "github")
+      rawIssues = rawIssues.filter ((ri) => !ri.pull_request)
 
     const issues = []
 
