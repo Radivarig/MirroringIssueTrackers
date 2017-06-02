@@ -1325,4 +1325,31 @@ export const webhookHandler = {
 
   },
 
+  repositoryExist: async (name: string, targetService: string): boolean => {
+    const restParams = {
+      service: targetService,
+      method: "get",
+    }
+
+    switch (targetService) {
+      case "youtrack":
+        restParams.url = ""
+      case "github":
+        restParams.url = `repos/${auth.github.user}/${name}`
+    }
+
+    const repository = await integrationRest (restParams)
+      .then ((response) => response.body)
+      .catch ((err) => {
+        if (err.status !== 404)
+          throw err
+      })
+
+    if (!repository || repository.name !== name) {
+      console.log ("No repository with name", name)
+      return false
+    }
+
+    return true
+  },
 }
