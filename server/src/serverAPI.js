@@ -518,7 +518,7 @@ export const webhookHandler = {
   },
 
   getIsOriginal: (issueOrComment: Issue | IssueComment): boolean =>
-    issueOrComment.body.indexOf (mirrorMetaVarName) === -1,
+    issueOrComment.body.indexOf (`<!--${mirrorMetaVarName}=`) === -1,
 
   addToMapping: (entity: Entity, assign: Object = {}) => {
     // todo, babel typeof..
@@ -1345,10 +1345,8 @@ export const webhookHandler = {
           throw err
       })
 
-    if (!repository || repository.name !== name) {
-      console.log ("No repository with name", name)
+    if (!repository || repository.name !== name)
       return false
-    }
 
     return true
   },
