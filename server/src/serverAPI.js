@@ -517,8 +517,10 @@ export const webhookHandler = {
     return await webhookHandler.getIssue (targetEntityService.service, targetEntityService.id)
   },
 
-  getIsOriginal: (issueOrComment: Issue | IssueComment): boolean =>
-    issueOrComment.body.indexOf (`<!--${mirrorMetaVarName}=`) === -1,
+  getIsOriginal: (issueOrComment: Issue | IssueComment): boolean => {
+    const meta = webhookHandler.getMeta (issueOrComment)
+    return meta === undefined
+  },
 
   addToMapping: (entity: Entity, assign: Object = {}) => {
     // todo, babel typeof..
