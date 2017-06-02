@@ -8,6 +8,7 @@ const whitelist = require('./whitelist')
 
 import {webhookHandler} from './serverAPI'
 
+// eslint-disable-next-line no-undef
 if (process.env.ENV !== "test")
   webhookHandler.initDoMirroring ()
 

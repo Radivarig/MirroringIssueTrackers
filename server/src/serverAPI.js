@@ -1327,7 +1327,7 @@ export const webhookHandler = {
 
   },
 
-  repositoryExist: async (name: string, targetService: string): boolean => {
+  repositoryExist: async (repoName: string, targetService: string): boolean => {
     const restParams = {
       service: targetService,
       method: "get",
@@ -1336,8 +1336,10 @@ export const webhookHandler = {
     switch (targetService) {
       case "youtrack":
         restParams.url = ""
+        break
       case "github":
-        restParams.url = `repos/${auth.github.user}/${name}`
+        restParams.url = `repos/${auth.github.user}/${repoName}`
+        break
     }
 
     const repository = await integrationRest (restParams)
@@ -1347,7 +1349,7 @@ export const webhookHandler = {
           throw err
       })
 
-    if (!repository || repository.name !== name)
+    if (!repository || repository.name !== repoName)
       return false
 
     return true
