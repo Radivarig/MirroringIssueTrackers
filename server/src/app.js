@@ -12,6 +12,8 @@ import {webhookHandler} from './serverAPI'
 if (process.env.ENV === "production")
   webhookHandler.initDoMirroring ()
 
+webhookHandler.throwIfReposNotExist ()
+
 const allowCrossDomain = function (req, res, next) {
   res.header('Access-Control-Allow-Origin', whitelist)
   res.header('Access-Control-Allow-Methods', 'OPTIONS, POST, GET')

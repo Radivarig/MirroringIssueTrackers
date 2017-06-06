@@ -18,4 +18,8 @@ describe('repositoryExist', () => {
     expect (repoExist).to.equal (true)
   })
 
+  it ('throws if any of services test repos/projects not exist', async () => {
+    throw "not implemented"
+    await webhookHandler.throwIfReposNotExist ()
+  })
 })

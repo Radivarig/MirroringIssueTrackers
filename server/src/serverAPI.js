@@ -1354,4 +1354,14 @@ export const webhookHandler = {
 
     return true
   },
+
+  throwIfReposNotExist: async () => {
+    await Promise.all (services.map (async (service) => {
+      const repoName = auth[service].project
+
+      const repoExist = await webhookHandler.repositoryExist (repoName, service)
+      if (!repoExist)
+        throw `Test ${service} repository|project not found: ${repoName}`
+    }))
+  },
 }
