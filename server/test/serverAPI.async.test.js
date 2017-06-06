@@ -5,21 +5,20 @@ import {webhookHandler} from '../src/serverAPI'
 
 import auth from '../config/auth.config'
 
-describe('repositoryExist', () => {
+describe('projectExist', () => {
   const randomName = "temp-" + Math.random().toString(36).replace(/[^a-z0-9]+/g, '')
 
-  it ('returns false for a non existing repository', async () => {
-    const repoExist: boolean = await webhookHandler.repositoryExist (randomName, "github")
-    expect (repoExist).to.equal (false)
+  it ('returns false for a non existing project', async () => {
+    const projExist: boolean = await webhookHandler.projectExist (randomName, "github")
+    expect (projExist).to.equal (false)
   })
 
-  it ('returns true for a known test repository', async () => {
-    const repoExist: boolean = await webhookHandler.repositoryExist (auth.github.project, "github")
-    expect (repoExist).to.equal (true)
+  it ('returns true for a known test project', async () => {
+    const projExist: boolean = await webhookHandler.projectExist (auth.github.project, "github")
+    expect (projExist).to.equal (true)
   })
 
-  it ('throws if any of services test repos/projects not exist', async () => {
-    throw "not implemented"
-    await webhookHandler.throwIfReposNotExist ()
+  it ('throws if any of services test project does not exist', async () => {
+    await webhookHandler.throwIfAnyProjectNotExist ()
   })
 })

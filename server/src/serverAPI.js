@@ -1327,7 +1327,7 @@ export const webhookHandler = {
 
   },
 
-  repositoryExist: async (repoName: string, targetService: string): boolean => {
+  projectExist: async (projName: string, targetService: string): boolean => {
     const restParams = {
       service: targetService,
       method: "get",
@@ -1338,37 +1338,37 @@ export const webhookHandler = {
         restParams.url = `project/all`
         break
       case "github":
-        restParams.url = `repos/${auth.github.user}/${repoName}`
+        restParams.url = `repos/${auth.github.user}/${projName}`
         break
     }
 
-    const repository = await integrationRest (restParams)
+    const project = await integrationRest (restParams)
       .then ((response) => response.body)
       .catch ((err) => {
         if (err.status !== 404)
           throw err
       })
 
-    if (!repository)
+    if (!project)
       return false
 
-    if (targetService === "github" && repository.name !== repoName)
+    if (targetService === "github" && project.name !== projName)
       return false
 
     if (targetService === "youtrack" &&
-      repository.filter ((proj) => proj.shortName === repoName).length === 0)
+      project.filter ((proj) => proj.shortName === projName).length === 0)
       return false
 
     return true
   },
 
-  throwIfReposNotExist: async () => {
+  throwIfAnyProjectNotExist: async () => {
     await Promise.all (services.map (async (service) => {
-      const repoName = auth[service].project
+      const projName = auth[service].project
 
-      const repoExist = await webhookHandler.repositoryExist (repoName, service)
-      if (!repoExist)
-        throw `Test ${service} repository|project not found: ${repoName}`
+      const projExist = await webhookHandler.projectExist (projName, service)
+      if (!projExist)
+        throw `Test ${service} repository|project not found: ${projName}`
     }))
   },
 }

@@ -12,7 +12,7 @@ import {webhookHandler} from './serverAPI'
 if (process.env.ENV === "production")
   webhookHandler.initDoMirroring ()
 
-webhookHandler.throwIfReposNotExist ()
+webhookHandler.throwIfAnyProjectNotExist ()
 
 const allowCrossDomain = function (req, res, next) {
   res.header('Access-Control-Allow-Origin', whitelist)
