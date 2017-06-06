@@ -16,6 +16,11 @@ import helpers from "./helpers"
 
 // import auth from "../config/auth.config"
 const auth: AuthConfig = require ("../config/auth.config").default
+import {
+  services,
+  forceMirroringTag,
+  mirrorMetaVarName,
+} from '../config/const.config'
 
 import settings from "../config/settings.config"
 
@@ -30,11 +35,6 @@ const recentlyCreatedIdsObj: Object = {}
 
 let startTime
 let keepTiming
-
-// do not change!
-const mirrorMetaVarName = "MIRROR_META"
-const forceMirroringTag = "forcemirror"
-const services = ["github", "youtrack"]
 
 const log = (...args) => {
   // skip lines containing with
