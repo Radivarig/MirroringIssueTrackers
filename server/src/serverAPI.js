@@ -1335,7 +1335,7 @@ export const webhookHandler = {
 
     switch (targetService) {
       case "youtrack":
-        restParams.url = ""
+        restParams.url = `project/all`
         break
       case "github":
         restParams.url = `repos/${auth.github.user}/${repoName}`
@@ -1349,7 +1349,14 @@ export const webhookHandler = {
           throw err
       })
 
-    if (!repository || repository.name !== repoName)
+    if (!repository)
+      return false
+
+    if (targetService === "github" && repository.name !== repoName)
+      return false
+
+    if (targetService === "youtrack" &&
+      repository.filter ((proj) => proj.shortName === repoName).length === 0)
       return false
 
     return true
