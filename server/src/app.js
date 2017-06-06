@@ -9,7 +9,7 @@ const whitelist = require('./whitelist')
 import {webhookHandler} from './serverAPI'
 
 // eslint-disable-next-line no-undef
-if (process.env.ENV !== "test")
+if (process.env.ENV === "production")
   webhookHandler.initDoMirroring ()
 
 const allowCrossDomain = function (req, res, next) {
