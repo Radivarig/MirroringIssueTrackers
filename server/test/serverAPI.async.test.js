@@ -33,34 +33,11 @@ describe('throwIfAnyProjectNotExist', () => {
   })
 })
 
-describe('getProjectIssues', async () => {
-  it ('returns only issues since given timestamp', async () => {
-    await Promise.all (services.map (async (service) => {
-      const issueA: Entity = {
-        id: Math.random ().toString (),
-        title: Math.random ().toString (),
-        body: Math.random ().toString (),
-        service,
-      }
+// get issues since now
+const testTimestamp = new Date ().getTime ()
+const randomIssues = []
 
-      const issueB: Entity = {
-        id: Math.random ().toString (),
-        title: Math.random ().toString (),
-        body: Math.random ().toString (),
-        service,
-      }
-
-      await webhookHandler.createIssue (issueA, service)
-      await helpers.asyncTimeout (5000)
-      const sinceTimestamp = new Date ().getTime ()
-      await webhookHandler.createIssue (issueB, service)
-
-      const issues = await webhookHandler.getProjectIssues (service, sinceTimestamp)
-      expect (issues.length).to.equal (1)
-    }))
-  })
-})
-
+// create 2 issues on each service
 describe('getProjectIssues', async () => {
   it ('returns only issues since given timestamp', async () => {
     await Promise.all (services.map (async (service) => {
@@ -72,8 +49,27 @@ describe('getProjectIssues', async () => {
       const sinceTimestamp = new Date ().getTime ()
       await webhookHandler.createIssue (issueB, service)
 
+      randomIssues.push (issueA, issueB)
+
       const issues = await webhookHandler.getProjectIssues (service, sinceTimestamp)
       expect (issues.length).to.equal (1)
+    }))
+  })
+})
+
+describe('initDoMirroring', async () => {
+  it ('mirrors issues', async () => {
+    // check that there are expected number of issues before mirroring
+    await Promise.all (services.map (async (service) => {
+      const issues = await webhookHandler.getProjectIssues (service, testTimestamp)
+      expect (issues.length).to.equal (2)
+    }))
+
+    await webhookHandler.initDoMirroring ({testTimestamp})
+
+    await Promise.all (services.map (async (service) => {
+      const issues = await webhookHandler.getProjectIssues (service, testTimestamp)
+      expect (issues.length).to.equal (4)
     }))
   })
 })
