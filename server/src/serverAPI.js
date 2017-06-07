@@ -1299,38 +1299,42 @@ export const webhookHandler = {
 
       const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
-      const restParams = {service: targetService}
-
-      switch (targetService) {
-        case "github": {
-          restParams.method = "post"
-          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
-          restParams.data = {
-            title: preparedIssue.title,
-            body: preparedIssue.body,
-            // github bug, creates multiple same labels
-            // labels: preparedIssue.labels,
-          }
-          break
-        }
-        case "youtrack": {
-          restParams.method = "put"
-          restParams.url = "issue"
-          restParams.query = {
-            // todo: move to sourceIssue.project
-            project: auth.youtrack.project,
-            summary: preparedIssue.title,
-            description: preparedIssue.body,
-          }
-          break
-        }
-      }
-
-      await integrationRest (restParams)
-      .then ((response) => response.body)
-      .catch ((err) => {throw err})
-
+      await webhookHandler.createIssue (preparedIssue)
     }))
+
+  },
+
+  createIssue: async (issue: Issue, targetService: string) => {
+    const restParams = {service: targetService}
+
+    switch (targetService) {
+      case "github": {
+        restParams.method = "post"
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
+        restParams.data = {
+          title: issue.title,
+          body: issue.body,
+          // github bug, creates multiple same labels
+          // labels: issue.labels,
+        }
+        break
+      }
+      case "youtrack": {
+        restParams.method = "put"
+        restParams.url = "issue"
+        restParams.query = {
+          // todo: move to sourceIssue.project
+          project: auth.youtrack.project,
+          summary: issue.title,
+          description: issue.body,
+        }
+        break
+      }
+    }
+
+    await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
 
   },
 
