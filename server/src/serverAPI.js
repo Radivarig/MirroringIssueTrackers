@@ -391,15 +391,15 @@ export const webhookHandler = {
       m.services.filter ((s) => s.service === entityService.service && s.id === entityService.id)[0])[0]
   },
 
-  getProjectIssues: async (sourceService: string, fromTimestamp: number | void) => {
+  getProjectIssues: async (sourceService: string, sinceTimestamp: number | void) => {
     const query = {}
 
     switch (sourceService) {
       case "youtrack": {
         query.max = 100000
 
-        if (fromTimestamp !== undefined)
-          query.updatedAfter = fromTimestamp
+        if (sinceTimestamp !== undefined)
+          query.updatedAfter = sinceTimestamp
 
         return await webhookHandler.getProjectIssuesRaw (sourceService, query)
       }
@@ -417,8 +417,8 @@ export const webhookHandler = {
         query.state = "all"
         query.per_page = 100
 
-        if (fromTimestamp !== undefined)
-          query.since = new Date(fromTimestamp).toISOString()
+        if (sinceTimestamp !== undefined)
+          query.since = new Date(sinceTimestamp).toISOString()
 
         return await webhookHandler.getProjectIssuesRaw (sourceService, query)
       }
