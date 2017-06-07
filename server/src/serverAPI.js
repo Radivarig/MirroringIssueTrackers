@@ -1382,4 +1382,19 @@ export const webhookHandler = {
         throw `Test ${service} repository|project not found: ${projName}`
     }))
   },
+
+  generateRandomIssue: (service: string): Issue => {
+    const issue: Issue = {
+      id: Math.random ().toString (),
+      title: Math.random ().toString (),
+      body: Math.random ().toString (),
+      service,
+    }
+
+    switch (service) {
+      // fill additional
+    }
+
+    return issue
+  },
 }

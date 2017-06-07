@@ -60,3 +60,20 @@ describe('getProjectIssues', async () => {
     }))
   })
 })
+
+describe('getProjectIssues', async () => {
+  it ('returns only issues since given timestamp', async () => {
+    await Promise.all (services.map (async (service) => {
+      const issueA = webhookHandler.generateRandomIssue (service)
+      const issueB = webhookHandler.generateRandomIssue (service)
+
+      await webhookHandler.createIssue (issueA, service)
+      await helpers.asyncTimeout (5000)
+      const sinceTimestamp = new Date ().getTime ()
+      await webhookHandler.createIssue (issueB, service)
+
+      const issues = await webhookHandler.getProjectIssues (service, sinceTimestamp)
+      expect (issues.length).to.equal (1)
+    }))
+  })
+})
