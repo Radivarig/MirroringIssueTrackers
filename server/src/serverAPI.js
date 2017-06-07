@@ -391,10 +391,16 @@ export const webhookHandler = {
       m.services.filter ((s) => s.service === entityService.service && s.id === entityService.id)[0])[0]
   },
 
-  getProjectIssues: async (sourceService: string) => {
+  getProjectIssues: async (sourceService: string, fromTimestamp: number | void) => {
+    const query = {}
+
     switch (sourceService) {
       case "youtrack": {
-        const query = {max: 10000}
+        query.max = 100000
+
+        if (fromTimestamp !== undefined)
+          query.updatedAfter = fromTimestamp
+
         return await webhookHandler.getProjectIssuesRaw (sourceService, query)
       }
       case "github": {
@@ -408,12 +414,13 @@ export const webhookHandler = {
         const closedIssues = await webhookHandler.getProjectIssuesRaw (sourceService, closedQuery)
         return openIssues.concat (closedIssues)
         */
-        const allMirroringQuery = {
-          state: "all",
-          // labels: "Mirroring",
-          per_page: 100,
-        }
-        return await webhookHandler.getProjectIssuesRaw (sourceService, allMirroringQuery)
+        query.state = "all"
+        query.per_page = 100
+
+        if (fromTimestamp !== undefined)
+          query.since = new Date(fromTimestamp).toISOString()
+
+        return await webhookHandler.getProjectIssuesRaw (sourceService, query)
       }
     }
   },
