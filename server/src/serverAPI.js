@@ -30,6 +30,7 @@ let store = new Store ()
 let redoMirroring: boolean = false
 let redoWasChanged: boolean = false
 let mirroringInProgress: boolean = false
+let testTimestamp: number | void = undefined
 
 const recentlyCreatedIdsObj: Object = {}
 
@@ -72,7 +73,10 @@ export const webhookHandler = {
 
   },
 
-  initDoMirroring: async () => {
+  initDoMirroring: async (opts: Object = {}) => {
+    if (opts.testTimestamp !== undefined)
+      testTimestamp = opts.testTimestamp
+
     startTime = startTime || new Date ().getTime ()
     keepTiming = false
     await webhookHandler.doMirroring ()
@@ -104,7 +108,7 @@ export const webhookHandler = {
 
     // get all issues
     await Promise.all (services.map (async (service) => {
-      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
+      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service, testTimestamp)
 
       log ("Issues count", service, projectIssues.length)
 
@@ -1288,7 +1292,7 @@ export const webhookHandler = {
   },
 
   createMirrorIssue: async (sourceIssue: Issue) => {
-    if (sourceIssue.service === "github") {
+    if (process.env.ENV !== "test" && sourceIssue.service === "github") {
       log ("temporary disabled gh->yt")
       return
     }
@@ -1299,7 +1303,7 @@ export const webhookHandler = {
 
       const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
-      await webhookHandler.createIssue (preparedIssue)
+      await webhookHandler.createIssue (preparedIssue, targetService)
     }))
 
   },
