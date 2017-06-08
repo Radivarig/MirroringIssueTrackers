@@ -1229,35 +1229,38 @@ export const webhookHandler = {
       if (!targetIssueService) {
         log ("No comment issue found", {comment, targetService})
         throw "Error"
-
       }
 
       const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
 
-      const restParams = {
-        service: targetService,
-        method: "post",
-      }
-
-      switch (targetService) {
-        case "youtrack":
-          restParams.url = `issue/${targetIssueService.id}/execute`
-          restParams.query = {
-            comment: preparedComment.body,
-          }
-          break
-        case "github":
-          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
-          restParams.data = {
-            body: preparedComment.body,
-          }
-          break
-      }
-
-      await integrationRest (restParams)
-      .then ((response) => response.body)
-      .catch ((err) => {throw err})
+      await webhookHandler.createComment (preparedComment, targetService, targetIssueService.id)
     }))
+  },
+
+  createComment: async (comment: IssueComment, targetService: string, targetIssueId: string) => {
+    const restParams = {
+      service: targetService,
+      method: "post",
+    }
+
+    switch (targetService) {
+      case "youtrack":
+        restParams.url = `issue/${targetIssueId}/execute`
+        restParams.query = {
+          comment: comment.body,
+        }
+        break
+      case "github":
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueId}/comments`
+        restParams.data = {
+          body: comment.body,
+        }
+        break
+    }
+
+    await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
   },
 
   getUniqueEntityServiceId: (entityService: EntityService): string =>
@@ -1395,10 +1398,21 @@ export const webhookHandler = {
       service,
     }
 
-    switch (service) {
-      // fill additional
-    }
+    // switch (service) {} // fill additional
 
     return issue
+  },
+
+  generateRandomComment: (service: string): IssueComment => {
+    const comment: IssueComment = {
+      id: Math.random ().toString (),
+      body: Math.random ().toString (),
+      issueId: Math.random ().toString (),
+      service,
+    }
+
+    // switch (service) {} // fill additional
+
+    return comment
   },
 }
