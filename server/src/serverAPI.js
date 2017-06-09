@@ -1370,7 +1370,7 @@ export const webhookHandler = {
     if (!project)
       return false
 
-    if (targetService === "github" && project.name !== projName)
+    if (targetService === "github" && project.name.toLowerCase () !== projName.toLowerCase ())
       return false
 
     if (targetService === "youtrack" &&
