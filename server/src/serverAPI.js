@@ -1202,6 +1202,51 @@ export const webhookHandler = {
 
   },
 
+  createMirrorComment: async (comment: IssueComment) => {
+    await Promise.all (services.map (async (targetService) => {
+      if (targetService === comment.service)
+        return
+
+      const knownIssueService: EntityService = {
+        service: comment.service,
+        id: comment.issueId,
+      }
+      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
+
+      if (!targetIssueService) {
+        log ("No comment issue found", {comment, targetService})
+        throw "Error"
+
+      }
+
+      const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
+
+      const restParams = {
+        service: targetService,
+        method: "post",
+      }
+
+      switch (targetService) {
+        case "youtrack":
+          restParams.url = `issue/${targetIssueService.id}/execute`
+          restParams.query = {
+            comment: preparedComment.body,
+          }
+          break
+        case "github":
+          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
+          restParams.data = {
+            body: preparedComment.body,
+          }
+          break
+      }
+
+      await integrationRest (restParams)
+      .then ((response) => response.body)
+      .catch ((err) => {throw err})
+    }))
+  },
+
   getUniqueEntityServiceId: (entityService: EntityService): string =>
     [entityService.service, entityService.id, entityService.issueId].join ("_"),
 
@@ -1226,105 +1271,58 @@ export const webhookHandler = {
     recentlyCreatedIdsObj[id] = true
   },
 
-  // todo: rename to createMirrors in case of third service
   createMirror: async (entity: Entity) => {
-    // temporary prevent issue creation from github service
-    if (!entity.issueId && entity.service === "github") {
-      log ("temporary disabled gh -> yt")
+    webhookHandler.throwOnCreationRecursion (entity)
+    if (webhookHandler.getIsComment (entity))
+      return await webhookHandler.createMirrorComment (entity)
+    return await webhookHandler.createMirrorIssue (entity)
+  },
+
+  createMirrorIssue: async (sourceIssue: Issue) => {
+    if (sourceIssue.service === "github") {
+      log ("temporary disabled gh->yt")
       return
     }
 
     await Promise.all (services.map (async (targetService) => {
-      if (targetService === entity.service)
+      if (targetService === sourceIssue.service)
         return
 
-      await webhookHandler.createEntity (entity, targetService)
+      const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
+
+      const restParams = {service: targetService}
+
+      switch (targetService) {
+        case "github": {
+          restParams.method = "post"
+          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
+          restParams.data = {
+            title: preparedIssue.title,
+            body: preparedIssue.body,
+            // github bug, creates multiple same labels
+            // labels: preparedIssue.labels,
+          }
+          break
+        }
+        case "youtrack": {
+          restParams.method = "put"
+          restParams.url = "issue"
+          restParams.query = {
+            // todo: move to sourceIssue.project
+            project: auth.youtrack.project,
+            summary: preparedIssue.title,
+            description: preparedIssue.body,
+          }
+          break
+        }
+      }
+
+      await integrationRest (restParams)
+      .then ((response) => response.body)
+      .catch ((err) => {throw err})
+
     }))
+
   },
 
-  createEntity: async (entity: Entity, targetService: string) => {
-    // todo: in case of third service, add target service to throwOnCreationRecursion
-    webhookHandler.throwOnCreationRecursion (entity)
-
-    if (webhookHandler.getIsComment (entity))
-      return await webhookHandler.createComment (entity, targetService)
-
-    return await webhookHandler.createIssue (entity, targetService)
-  },
-
-  createIssue: async (sourceIssue: Issue, targetService: string) => {
-    const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
-
-    const restParams = {service: targetService}
-
-    switch (targetService) {
-      case "github": {
-        restParams.method = "post"
-        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
-        restParams.data = {
-          title: preparedIssue.title,
-          body: preparedIssue.body,
-          // github bug, creates multiple same labels
-          // labels: preparedIssue.labels,
-        }
-        break
-      }
-      case "youtrack": {
-        restParams.method = "put"
-        restParams.url = "issue"
-        restParams.query = {
-          // todo: move to sourceIssue.project
-          project: auth.youtrack.project,
-          summary: preparedIssue.title,
-          description: preparedIssue.body,
-        }
-        break
-      }
-    }
-
-    return await integrationRest (restParams)
-    .then ((response) => response.body)
-    .catch ((err) => {throw err})
-  },
-
-  createComment: async (sourceComment: IssueComment, targetService: string) => {
-    const knownIssueService: EntityService = {
-      service: sourceComment.service,
-      id: sourceComment.issueId,
-    }
-
-    const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
-
-    if (!targetIssueService) {
-      log ("No comment issue found", {sourceComment, targetService})
-      throw "Error"
-    }
-
-    const preparedComment: IssueComment =
-      webhookHandler.getPreparedMirrorCommentForUpdate (sourceComment, targetService)
-
-    const restParams = {
-      service: targetService,
-      method: "post",
-    }
-
-    switch (targetService) {
-      case "youtrack":
-        restParams.url = `issue/${targetIssueService.id}/execute`
-        restParams.query = {
-          comment: preparedComment.body,
-        }
-        break
-      case "github":
-        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
-        restParams.data = {
-          body: preparedComment.body,
-        }
-        break
-    }
-
-    await integrationRest (restParams)
-    .then ((response) => response.body)
-    .catch ((err) => {throw err})
-  },
 }
