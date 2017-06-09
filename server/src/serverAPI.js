@@ -1321,8 +1321,7 @@ export const webhookHandler = {
         restParams.data = {
           title: issue.title,
           body: issue.body,
-          // github bug, creates multiple same labels
-          // labels: issue.labels,
+          labels: issue.labels,
         }
         break
       }
