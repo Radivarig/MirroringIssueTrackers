@@ -32,6 +32,9 @@ let redoWasChanged: boolean = false
 let mirroringInProgress: boolean = false
 let testTimestamp: number | void = undefined
 
+let isIssuesQueueLocked: boolean = false
+let issuesQueue: Array<EntityService> = []
+
 const recentlyCreatedIdsObj: Object = {}
 
 let startTime
@@ -68,14 +71,52 @@ export const webhookHandler = {
         return
 
       log ("Changed issue:".yellow, service, issueId)
-      await webhookHandler.initDoMirroring ()
+      await webhookHandler.initDoMirroring ({service, issueId})
     }
-
   },
+
+  operationOnQueue: async (callback: Function) => {
+    // eslint-disable-next-line no-unmodified-loop-condition
+    while (isIssuesQueueLocked)
+      await helpers.asyncTimeout (10)
+    isIssuesQueueLocked = true
+    await callback ()
+    isIssuesQueueLocked = false
+  },
+
+  addIssueToQueue: async (issue: EntityService) => {
+    const addIssue_cb = () => {
+      // add to start
+      issuesQueue.unshift (issue)
+    }
+    await webhookHandler.removeIssueFromQueue (issue)
+    await webhookHandler.operationOnQueue (addIssue_cb)
+  },
+
+  removeIssueFromQueue: async (issue: EntityService) => {
+    const removeIssue_cb = () => {
+      issuesQueue = issuesQueue.filter ((queuedIssue) => (
+        webhookHandler.getUniqueEntityServiceId (queuedIssue) !==
+        webhookHandler.getUniqueEntityServiceId (issue)
+      ))
+    }
+    await webhookHandler.operationOnQueue (removeIssue_cb)
+  },
+
+  getIssuesQueue: () => [...issuesQueue],
+  getIsIssuesQueueLocked: () => isIssuesQueueLocked,
 
   initDoMirroring: async (opts: Object = {}) => {
     if (opts.testTimestamp !== undefined)
       testTimestamp = opts.testTimestamp
+
+    if (opts.issueId) {
+      const issueService: EntityService = {
+        id: opts.issueId,
+        service: opts.service,
+      }
+      await webhookHandler.addIssueToQueue (issueService)
+    }
 
     startTime = startTime || new Date ().getTime ()
     keepTiming = false
