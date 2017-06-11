@@ -654,16 +654,14 @@ export const webhookHandler = {
     return false
   },
 
-  getOtherEntity: async (sourceEntity: Entity): Entity | void => {
+  getOtherEntity: async (sourceEntityService: EntityService): Entity | void => {
     let targetService
 
-    switch (sourceEntity.service) {
+    switch (sourceEntityService.service) {
       case "github": targetService = "youtrack"; break
       case "youtrack": targetService = "github"; break
     }
-
-    const knownEntityService: EntityService = sourceEntity
-    return await webhookHandler.getTargetEntity (knownEntityService, targetService)
+    return await webhookHandler.getTargetEntity (sourceEntityService, targetService)
   },
 
   getGithubCounterparts: (issueIds: Array<string>): Array<string> =>
