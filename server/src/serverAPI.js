@@ -144,7 +144,7 @@ export const webhookHandler = {
     // clear store
     // store = new Store ()
 
-    const allIssues: Array<Issue> = []
+    let allIssues: Array<Issue> = []
     const allComments: Array<IssueComment> = []
 
     // get all issues
@@ -212,8 +212,23 @@ export const webhookHandler = {
       log ("Waiting webhook from mirrors of".blue, issuesWaitingForMirrors.map (
         (entityService) => webhookHandler.entityLog (entityService)).join (", "))
       keepTiming = true
-
     }
+
+    const issuesQueueUniqueIds = webhookHandler.getIssuesQueue ().map (
+      (q) => webhookHandler.getUniqueEntityServiceId (q))
+
+    allIssues = allIssues.filter ((issue) => {
+      const uniqueId = webhookHandler.getUniqueEntityServiceId (issue)
+      return issuesQueueUniqueIds.indexOf (uniqueId) !== -1
+    })
+      // add counterparts
+    const counterparts = []
+    for (let i = 0; i < allIssues.length; ++i) {
+      const issue = allIssues[i]
+      const counterpart = await webhookHandler.getOtherEntity (issue)
+      counterparts.push (counterpart)
+    }
+    allIssues = allIssues.concat (counterparts.filter (Boolean))
 
     let areIssuesChanged = false
 
