@@ -1,4 +1,5 @@
 import {
+  Entity,
   EntityService,
   EntityMapping,
 } from "./types"
@@ -29,12 +30,12 @@ export class Mapping {
     })
   }
 
-  add (newEntityService: EntityService, knownEntityService: EntityService | void, assignToMapping: Object = {}) {
+  add (newEntity: Entity, knownEntityService: EntityService | void, assignToMapping: Object = {}) {
     for (let i = 0; i < this.mappings.length; ++i) {
       const mapping: EntityMapping = this.mappings[i]
 
       const alreadyExists = mapping.services.filter ((f) =>
-        f.service === newEntityService.service && f.id === newEntityService.id
+        f.service === newEntity.service && f.id === newEntity.id
       )[0]
 
       if (alreadyExists) {
@@ -50,7 +51,7 @@ export class Mapping {
         // assign
         Object.assign (mapping, assignToMapping)
         // append service
-        mapping.services.push (newEntityService)
+        mapping.services.push (newEntity)
         return
       }
     }
@@ -66,7 +67,7 @@ export class Mapping {
     // fill services
     if (knownEntityService)
       newEntityMapping.services.push (knownEntityService)
-    newEntityMapping.services.push (newEntityService)
+    newEntityMapping.services.push (newEntity)
 
     // assign
     Object.assign (newEntityMapping, assignToMapping)

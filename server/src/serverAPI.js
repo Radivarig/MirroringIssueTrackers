@@ -237,7 +237,9 @@ export const webhookHandler = {
       }
 
       log ("Processing issue".grey, webhookHandler.entityLog (issue))
-      const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue)
+
+      const otherEntity = webhookHandler.getOtherEntity (issue)
+      const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue, otherEntity)
 
       if (["created", "updated", "deleted"].indexOf (actionTaken) !== -1)
         areIssuesChanged = true
@@ -307,7 +309,8 @@ export const webhookHandler = {
           continue
         }
 
-        const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment)
+        const otherEntity = webhookHandler.getOtherEntity (comment)
+        const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment, otherEntity)
 
         if (lastActions.indexOf (actionTaken) !== -1)
           webhookHandler.addToMapping (comment, {lastAction: actionTaken})
@@ -355,24 +358,22 @@ export const webhookHandler = {
 
   // call doSingleEntity from doMirroring only
   // returns a string of action taken
-  doSingleEntity: async (entity: Entity): DoSingleEntityAction  => {
+  doSingleEntity: async (entity: Entity, otherEntity: Entity | void): DoSingleEntityAction  => {
     // todo use await Promise.all (services.map (async (targetService) => { doSingleEntity (targetService)
     // instead getOtherEntity from inside
 
     // if original
     if (webhookHandler.getIsOriginal (entity)) {
-      const mirrorEntity: Entity | void = await webhookHandler.getOtherEntity (entity)
-
       // if has mirror
-      if (mirrorEntity) {
+      if (otherEntity) {
         // skip if equal
-        if (webhookHandler.getIsOriginalEqualToMirror (entity, mirrorEntity)) {
+        if (webhookHandler.getIsOriginalEqualToMirror (entity, otherEntity)) {
           log ("Skip updating equal mirror of".grey, webhookHandler.entityLog (entity))
           return "skipped_equal"
         }
 
         // update if not equal
-        log ("Update mirror ".green + webhookHandler.entityLog (mirrorEntity),
+        log ("Update mirror ".green + webhookHandler.entityLog (otherEntity),
           "of".green, webhookHandler.entityLog (entity))
 
         await webhookHandler.updateMirror (entity)
@@ -386,13 +387,11 @@ export const webhookHandler = {
     }
     // else is mirror
 
-    const origEntity: Entity | void = await webhookHandler.getOtherEntity (entity)
-
-      // if has original
-    if (origEntity) {
+    // if has original
+    if (otherEntity) {
         // nothing, original will be called from doMirroring
       log ("Skip mirror".grey, webhookHandler.entityLog (entity),
-        "of".grey, webhookHandler.entityLog (origEntity))
+        "of".grey, webhookHandler.entityLog (otherEntity))
       return "skipped_mirror"
     }
 
@@ -556,17 +555,26 @@ export const webhookHandler = {
     return mappings.getEntityService (knownEntityService, targetService)
   },
 
-  getTargetEntity: async (knownEntityService: EntityService, targetService: string): Entity | void => {
+  getTargetEntity: (knownEntityService: EntityService, targetService: string): Entity | void => {
 
     const targetEntityService: EntityService | void = webhookHandler.getEntityService (knownEntityService, targetService)
 
     if (!targetEntityService)
       return
 
+    try {
+      const targetEntity: Entity = targetEntityService
+      return targetEntity
+    }
+    // eslint-disable-next-line no-empty
+    catch (e) {}
+
+    /*
     if (targetEntityService.issueId)
       return await webhookHandler.getComment (targetEntityService)
 
     return await webhookHandler.getIssue (targetEntityService.service, targetEntityService.id)
+    */
   },
 
   getIsOriginal: (issueOrComment: Issue | IssueComment): boolean => {
@@ -654,14 +662,14 @@ export const webhookHandler = {
     return false
   },
 
-  getOtherEntity: async (sourceEntityService: EntityService): Entity | void => {
+  getOtherEntity: (sourceEntityService: EntityService): Entity | void => {
     let targetService
 
     switch (sourceEntityService.service) {
       case "github": targetService = "youtrack"; break
       case "youtrack": targetService = "github"; break
     }
-    return await webhookHandler.getTargetEntity (sourceEntityService, targetService)
+    return webhookHandler.getTargetEntity (sourceEntityService, targetService)
   },
 
   getGithubCounterparts: (issueIds: Array<string>): Array<string> =>
