@@ -25,7 +25,7 @@ import {
 import settings from "../config/settings.config"
 
 import Store from './Store'
-let store = new Store ()
+const store = new Store ()
 
 let redoMirroring: boolean = false
 let redoWasChanged: boolean = false
@@ -355,7 +355,6 @@ export const webhookHandler = {
         // keepTiming = true //todo
         log ("Possible changes due webhooks", "restarting".cyan)
         redoWasChanged = false
-        store = new Store ()
         return await webhookHandler.initDoMirroring ()
       }
 
@@ -363,7 +362,6 @@ export const webhookHandler = {
       startTime = undefined
 
       log ("Continue listening for changes".cyan)
-      store = new Store ()
     }
     else {
       // timeout?
