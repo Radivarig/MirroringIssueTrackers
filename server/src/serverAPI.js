@@ -242,11 +242,7 @@ export const webhookHandler = {
       const issueMapping = webhookHandler.getEntityServiceMapping (issue)
       const lastAction = issueMapping && issueMapping.lastAction
 
-      if (lastAction === "deleted") {
-        console.log ("removing mapping", issue.id, issue.service)
-        store.removeMappingContaining (issue)
-      }
-      else if (["updated", "skipped_equal"].indexOf (lastAction) !== -1) {
+      if (["updated", "skipped_equal"].indexOf (lastAction) !== -1) {
         log ("Skip already addressed issue".grey, webhookHandler.entityLog (issue), lastAction.grey)
         continue
       }
@@ -256,7 +252,11 @@ export const webhookHandler = {
       const otherEntity = webhookHandler.getOtherEntity (issue)
       const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue, otherEntity)
 
-      if (["created", "updated", "deleted"].indexOf (actionTaken) !== -1)
+      if (actionTaken === "deleted") {
+        log ("removing mapping", webhookHandler.entityLog (issue))
+        webhookHandler.removeMappingContaining (issue)
+      }
+      else if (["created", "updated"].indexOf (actionTaken) !== -1)
         areIssuesChanged = true
 
       // todo, refactor lastAction
@@ -310,15 +310,10 @@ export const webhookHandler = {
       for (let i = 0; i < issue.comments.length; ++i) {
         const comment: IssueComment = issue.comments[i]
 
-        const lastActions = ["created", "deleted", "updated", "skipped_equal"]
-
         const commentMapping = webhookHandler.getEntityServiceMapping (comment)
         const lastAction = commentMapping && commentMapping.lastAction
 
-        if (lastAction === "deleted") {
-          webhookHandler.removeMappingContaining (comment)
-        }
-        else if (["created", "updated", "skipped_equal"].indexOf (lastAction) !== -1) {
+        if (["created", "updated", "skipped_equal"].indexOf (lastAction) !== -1) {
         // else if (lastAction === "skipped_equal") {
           log ("Skip already addressed comment".grey, webhookHandler.entityLog (comment), lastAction.grey)
           continue
@@ -327,7 +322,11 @@ export const webhookHandler = {
         const otherEntity = webhookHandler.getOtherEntity (comment)
         const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment, otherEntity)
 
-        if (lastActions.indexOf (actionTaken) !== -1)
+        if (actionTaken === "deleted") {
+          log ("removing mapping", webhookHandler.entityLog (comment))
+          webhookHandler.removeMappingContaining (comment)
+        }
+        else if (["created", "updated", "skipped_equal"].indexOf (actionTaken) !== -1)
           webhookHandler.addToMapping (comment, {lastAction: actionTaken})
 
         /*
