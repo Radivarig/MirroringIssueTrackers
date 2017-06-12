@@ -141,10 +141,8 @@ export const webhookHandler = {
     redoMirroring = false
     mirroringInProgress = true
 
-    // clear store
-    // store = new Store ()
-
-    let allIssues: Array<Issue> = []
+    let issues: Array<Issue> = []
+    const allIssues: Array<Issue> = []
     const allComments: Array<IssueComment> = []
 
     // get all issues
@@ -195,14 +193,24 @@ export const webhookHandler = {
       allIssues.push (...filteredIssues)
     }))
 
+    if (webhookHandler.getIssuesQueue ().length !== 0)
+      issues = webhookHandler.filterQueuedIssues (allIssues)
+    else issues = allIssues
+
     // sort issue origs first, do ids mapping
-    await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allIssues).map (async (issue) => {
-      log ("Initial mapping".grey, webhookHandler.entityLog (issue))
+    await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (issues).map (async (issue) => {
+      log ("Mapping".grey, webhookHandler.entityLog (issue))
 
       const isMirror = webhookHandler.getIsOriginal (issue) === false
-      // mapping sorted issues origs first
+
+      // clear lastAction flag to trigger check if update is necessary
+      const toApply = {lastAction: undefined}
+
       // setting false to indicate that the mirror has been delivered
-      webhookHandler.addToMapping (issue, isMirror ? {waitingForMirror: false} : {})
+      if (isMirror)
+        toApply.waitingForMirror = false
+
+      webhookHandler.addToMapping (issue, toApply)
     }))
 
     const issuesWaitingForMirrors: Array<EntityService> = webhookHandler.getOriginalsWaitingForMirrors ()
@@ -214,27 +222,11 @@ export const webhookHandler = {
       keepTiming = true
     }
 
-    const issuesQueueUniqueIds = webhookHandler.getIssuesQueue ().map (
-      (q) => webhookHandler.getUniqueEntityServiceId (q))
-
-    allIssues = allIssues.filter ((issue) => {
-      const uniqueId = webhookHandler.getUniqueEntityServiceId (issue)
-      return issuesQueueUniqueIds.indexOf (uniqueId) !== -1
-    })
-      // add counterparts
-    const counterparts = []
-    for (let i = 0; i < allIssues.length; ++i) {
-      const issue = allIssues[i]
-      const counterpart = await webhookHandler.getOtherEntity (issue)
-      counterparts.push (counterpart)
-    }
-    allIssues = allIssues.concat (counterparts.filter (Boolean))
-
     let areIssuesChanged = false
 
     // call doSingleEntity one by one issue
     // todo sort mirrors first to proritize removing deleted issues
-    const allIssuesMirrorsFirst = webhookHandler.getEntitiesWithOriginalsFirst (allIssues).reverse()
+    const allIssuesMirrorsFirst = webhookHandler.getEntitiesWithOriginalsFirst (issues).reverse()
 
     for (let i = 0; i < allIssuesMirrorsFirst.length; ++i) {
       const issue = allIssuesMirrorsFirst[i]
@@ -275,14 +267,14 @@ export const webhookHandler = {
       return
     }
 
-    if (allIssues.length === 0) {
+    if (issues.length === 0) {
       log ("No issues to mirror")
       mirroringInProgress = false
 
     }
 
     // get all comments
-    await Promise.all (allIssues.map (async (issue) => {
+    await Promise.all (issues.map (async (issue) => {
       // fetching issue comments
       let issueComments
       if (issue.service === "youtrack")
@@ -301,11 +293,11 @@ export const webhookHandler = {
     }))
 
     // temporarily commented
-    // await Promise.all (allIssues.map (async (issue) => {
+    // await Promise.all (issues.map (async (issue) => {
 
     // call doSingleEntity for comments of every issue
-    for (let j = 0; j < allIssues.length; ++j) {
-      const issue = allIssues[j]
+    for (let j = 0; j < issues.length; ++j) {
+      const issue = issues[j]
 
       for (let i = 0; i < issue.comments.length; ++i) {
         const comment: IssueComment = issue.comments[i]
@@ -414,6 +406,24 @@ export const webhookHandler = {
     return "deleted"
   },
 
+  filterQueuedIssues: (issues: Array<Issue>): Array<Issue> => {
+    const issuesQueueUniqueIds = webhookHandler.getIssuesQueue ().map (
+      (q) => webhookHandler.getUniqueEntityServiceId (q))
+
+    issues = issues.filter ((issue) => {
+      const uniqueId = webhookHandler.getUniqueEntityServiceId (issue)
+      return issuesQueueUniqueIds.indexOf (uniqueId) !== -1
+    })
+    // add counterparts
+    const counterparts = []
+    for (let i = 0; i < issues.length; ++i) {
+      const issue = issues[i]
+      const counterpart = webhookHandler.getOtherEntity (issue)
+      counterparts.push (counterpart)
+    }
+    return issues.concat (counterparts.filter (Boolean))
+  },
+
   getEntitiesWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {
     const originals = []
     const mirrors = []
@@ -430,7 +440,6 @@ export const webhookHandler = {
     if (webhookHandler.getIsComment (knownEntityService))
       store.commentMappings.removeMappingContaining (knownEntityService)
     else store.issueMappings.removeMappingContaining (knownEntityService)
-
   },
 
   getOriginalsWaitingForMirrors: (areComments: boolean = false): Array<EntityService> => {
@@ -568,8 +577,8 @@ export const webhookHandler = {
   },
 
   getTargetEntity: (knownEntityService: EntityService, targetService: string): Entity | void => {
-
-    const targetEntityService: EntityService | void = webhookHandler.getEntityService (knownEntityService, targetService)
+    const targetEntityService: EntityService | void =
+      webhookHandler.getEntityService (knownEntityService, targetService)
 
     if (!targetEntityService)
       return
@@ -580,13 +589,13 @@ export const webhookHandler = {
     }
     // eslint-disable-next-line no-empty
     catch (e) {}
+  },
 
-    /*
+  fetchTargetEntity: async (targetEntityService: EntityService): Entity | void => {
     if (targetEntityService.issueId)
       return await webhookHandler.getComment (targetEntityService)
 
     return await webhookHandler.getIssue (targetEntityService.service, targetEntityService.id)
-    */
   },
 
   getIsOriginal: (issueOrComment: Issue | IssueComment): boolean => {
@@ -1354,6 +1363,7 @@ export const webhookHandler = {
   },
 
   createMirrorIssue: async (sourceIssue: Issue) => {
+    // eslint-disable-next-line no-undef
     if (process.env.ENV !== "test" && sourceIssue.service === "github") {
       log ("temporary disabled gh->yt")
       return
