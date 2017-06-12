@@ -22,11 +22,20 @@ export class Mapping {
     }
   }
 
-  removeMappingContaining (knownEntityService: EntityService) {
+  removeMappingContaining (containsObj: Object) {
     this.mappings = this.mappings.filter ((m) => {
-      const mappingContainsKnownService = m.services.filter (
-        (s) => s.id === knownEntityService.id && s.value === knownEntityService.value)[0] !== undefined
-      return !mappingContainsKnownService
+      const serviceContainsAllProperties = m.services.filter (
+        (s) => {
+          for (const p in containsObj) {
+            if (s[p] !== containsObj[p]) {
+              return false
+            }
+          }
+          console.log ("removing mapping", s)
+          return true
+        }
+      )[0] !== undefined
+      return !serviceContainsAllProperties
     })
   }
 
