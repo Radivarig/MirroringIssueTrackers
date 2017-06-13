@@ -754,7 +754,7 @@ export const webhookHandler = {
   getTitlePrefix: (issue: Issue, targetService): string => {
     switch (targetService) {
       case "github": return `[${issue.id}] `
-      case "youtrack": return ""
+      case "youtrack": return `(#${issue.id}) `
     }
   },
 
