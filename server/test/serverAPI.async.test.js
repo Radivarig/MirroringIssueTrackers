@@ -55,12 +55,16 @@ describe('getProjectIssues', async () => {
 
       // create one issue before timestamp
       await webhookHandler.createIssue (issueA, service)
-      await helpers.asyncTimeout (5000)
+
+      const timestampMismatch = 10000
+      await helpers.asyncTimeout (timestampMismatch)
+
       const sinceTimestamp = new Date ().getTime ()
       // create another after the timestamp
       await webhookHandler.createIssue (issueB, service)
 
       const issues = await webhookHandler.getProjectIssues (service, sinceTimestamp)
+
       expect (issues.length).to.equal (1)
 
       testEntities[service].issues.push (issueA)
