@@ -73,7 +73,7 @@ describe('getProjectIssues', async () => {
   })
 })
 
-describe('initDoMirroring', async () => {  
+describe('initDoMirroring', async () => {
   it ('mirrors issues', async () => {
     // check that there are expected number of issues before mirroring
     await Promise.all (services.map (async (service) => {
@@ -129,26 +129,48 @@ describe('initDoMirroring', async () => {
   it ('mirrors comments', async () => {
     await webhookHandler.initDoMirroring ({testTimestamp})
 
-    await Promise.all (services.map (async (service) => {
-      const issues = await webhookHandler.getProjectIssues (service, testTimestamp)
+    const githubIssues = await webhookHandler.getProjectIssues ("github", testTimestamp)
+    const youtrackIssues = await webhookHandler.getProjectIssues ("youtrack", testTimestamp)
 
-      for (let i = 0; i < issues.length; ++i) {
-        const issue = issues[i]
+    expect (githubIssues.length).to.equal (youtrackIssues.length)
 
-        if (webhookHandler.getIsOriginal (issue)) {
-          await Promise.all (services.map (async (service2) => {
-            if (service === service2)
-              return
+    for (let i = 0; i < githubIssues.length; ++i) {
+      const githubIssue = githubIssues [i]
+      const youtrackIssue = youtrackIssues [i]
 
-            // get mirror issue id
-            // get comments from original
-            // get comments from mirror
-            // compare them
-            // const issueComments = await webhookHandler.getComments (service, mirrorIssues[0].id)
-          }))
-        }
+      // expect one to be original and other a mirror
+      if (webhookHandler.getIsOriginal (githubIssue))
+        expect (webhookHandler.getIsOriginal (youtrackIssue)).to.equal (false)
+      else
+        expect (webhookHandler.getIsOriginal (youtrackIssue)).to.equal (true)
+
+      expect (webhookHandler.getIsOriginalEqualToMirror (githubIssue, youtrackIssue))
+
+     // check only mirrors as they have issueId of original to match
+      if (webhookHandler.getIsOriginal (githubIssue))
+        return
+
+      // githubIssues is now a mirror
+      const githubComments = await webhookHandler.getComments ("github", githubIssue.id)
+      // get original from mirror meta.id
+      const originalId = webhookHandler.getMeta (githubIssue).id
+      const youtrackComments = await webhookHandler.getComments ("youtrack", originalId)
+
+      expect (githubComments.length).to.equal (youtrackComments.length)
+
+      for (let j = 0; j < githubComments.length; ++j) {
+        const githubComment = githubComments [j]
+        const youtrackComment = youtrackComments [j]
+
+        // expect one to be original and other a mirror
+        if (webhookHandler.getIsOriginal (githubComment))
+          expect (webhookHandler.getIsOriginal (youtrackComment)).to.equal (false)
+        else
+          expect (webhookHandler.getIsOriginal (youtrackComment)).to.equal (true)
+
+        expect (webhookHandler.getIsOriginalEqualToMirror (githubComment, youtrackComment))
       }
-    }))
+    }
   })
 
 })
