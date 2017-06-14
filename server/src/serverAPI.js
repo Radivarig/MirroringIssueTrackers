@@ -27,6 +27,10 @@ import settings from "../config/settings.config"
 import Store from './Store'
 const store = new Store ()
 
+import UsernameMapping, {KnownUsernameInfo} from './UsernameMapping'
+import usernameInfos from '../config/usernameInfos'
+const usernameMapping = new UsernameMapping (usernameInfos)
+
 let redoMirroring: boolean = false
 let redoWasChanged: boolean = false
 let mirroringInProgress: boolean = false
@@ -733,7 +737,7 @@ export const webhookHandler = {
     const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
 
     const convertedBody =
-      webhookHandler.convertMentions (nameQuote + comment.body, targetService)
+      webhookHandler.convertMentions (nameQuote + comment.body, comment.service, targetService)
 
     return {
       ...comment,
@@ -748,8 +752,39 @@ export const webhookHandler = {
     }
   },
 
-  convertMentions (body: string, targetService: string): string {
-    return body.replace (/\B@/ig, ((match) => "@'"))
+  removeNonLettersFromEnd: (str: string): string => {
+    while (str !== "" && str[str.length - 1].match(/[a-z0-9]/i) === null)
+      str = str.substring (0, str.length - 1)
+    return str || ""
+  },
+
+  convertMentions: (body, sourceService, targetService): string =>
+    webhookHandler.convertMentionsRaw (body, sourceService, targetService, usernameMapping),
+
+  convertMentionsRaw: (body: string, sourceService: string, targetService: string,
+    _usernameMapping: UsernameMapping): string => {
+    const replacedBody = body.replace (/\B@[a-z0-9.]+/ig, ((m) => {
+      // remove @ symbol
+      m = m.substring (1)
+
+      const username = m && webhookHandler.removeNonLettersFromEnd (m)
+
+      if (username) {
+        const knownUsernameInfo: KnownUsernameInfo = {
+          username,
+          service: sourceService,
+        }
+        const counterpartUsername = _usernameMapping.getUsername (knownUsernameInfo, targetService)
+
+        if (counterpartUsername)
+          return `@${counterpartUsername}`
+      }
+
+      // else break mention
+      return `@(${sourceService})${m}`
+    }))
+
+    return replacedBody
   },
 
   getPreparedMirrorEntityForUpdate: (entity: Entity, targetService: string): Entity => {
@@ -772,7 +807,7 @@ export const webhookHandler = {
     const nameQuote = webhookHandler.getNameQuote (issue, targetService)
     const titlePrefix = webhookHandler.getTitlePrefix (issue, targetService)
 
-    const convertedBody = webhookHandler.convertMentions (nameQuote + issue.body, targetService)
+    const convertedBody = webhookHandler.convertMentions (nameQuote + issue.body, issue.service, targetService)
 
     return {
       ...issue,
