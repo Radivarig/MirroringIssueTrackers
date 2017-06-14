@@ -725,11 +725,11 @@ export const webhookHandler = {
   },
 
   getNameQuote: (entity: Entity, targetService: string): string => {
-    let nameQuote = `<blockquote>@${entity.author}</blockquote>`
+    let nameQuote = `>@${entity.author}`
     switch (targetService) {
       case "youtrack": nameQuote = `{html}${nameQuote}{html}`
     }
-    return `${nameQuote}\n\n`
+    return `${nameQuote} commented:\n\n`
   },
 
   getPreparedMirrorCommentForUpdate: (comment: IssueComment, targetService: string): Entity => {
