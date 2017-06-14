@@ -47,7 +47,7 @@ describe('removeNonLettersFromEnd', () => {
 })
 
 describe('convertMentions', () => {
-  const charAfterMonkeyIfNoMatch = "("
+  const charAfterMonkeyIfNoMatch = "'"
 
   const usernameInfos = [{github: "githubUsername1", youtrack: "youtrackUsername1"}]
   const usernameMapping = new UsernameMapping (usernameInfos)

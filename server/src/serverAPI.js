@@ -781,7 +781,7 @@ export const webhookHandler = {
       }
 
       // else break mention
-      return `@(${sourceService})${m}`
+      return `@'${m}`
     }))
 
     return replacedBody
