@@ -133,9 +133,6 @@ export const webhookHandler = {
   // call doSingleEntity for each issue,
   // for each issue, call doSingleEntity for all comments.
   doMirroring: async () => {
-    // wait to reduce frequency of requests.. github will return Forbidden
-    await helpers.asyncTimeout (1000)
-
     if (mirroringInProgress) {
       redoMirroring = true
       redoWasChanged = true
@@ -144,13 +141,15 @@ export const webhookHandler = {
     redoMirroring = false
     mirroringInProgress = true
 
+    // wait to reduce frequency of requests.. github will return Forbidden
+    await helpers.asyncTimeout (1000)
+
     let issues: Array<Issue> = []
     const allIssues = await webhookHandler.getAllIssues ()
 
     if (webhookHandler.getIssuesQueue ().length !== 0) {
       issues = webhookHandler.filterQueuedIssuesAndCounterparts (allIssues)
-
-      // remove all comment mappings to refetch them
+      // remove comment mappings to refetch them
       issues.forEach ((issue) => {
         webhookHandler.removeMappingContaining ({issueId: issue.id})
       })
