@@ -144,7 +144,7 @@ export const webhookHandler = {
     const allIssues = await webhookHandler.getAllIssues ()
 
     if (webhookHandler.getIssuesQueue ().length !== 0) {
-      issues = webhookHandler.filterQueuedIssues (allIssues)
+      issues = webhookHandler.filterQueuedIssuesAndCounterparts (allIssues)
 
       // remove all comment mappings to refetch them
       issues.forEach ((issue) => {
@@ -409,23 +409,22 @@ export const webhookHandler = {
     return "deleted"
   },
 
-  filterQueuedIssues: (issues: Array<Issue>): Array<Issue> => {
-    const issuesQueueUniqueIds = webhookHandler.getIssuesQueue ().map (
-      (q) => webhookHandler.getUniqueEntityServiceId (q))
+  filterQueuedIssuesAndCounterparts: (issues: Array<Issue>): Array<Issue> => { {/*fix for syntax highlighting*/}
+    const uniqueIds: Array<string> = []
+    webhookHandler.getIssuesQueue ().forEach ((issue) => {
+      // add queued issue id
+      uniqueIds.push (webhookHandler.getUniqueEntityServiceId (issue))
 
-    issues = issues.filter ((issue) => {
-      const uniqueId = webhookHandler.getUniqueEntityServiceId (issue)
-      return issuesQueueUniqueIds.indexOf (uniqueId) !== -1
+      // add queued issue counterpart id
+      const localCounterpart = webhookHandler.getOtherEntity (issue)
+      if (localCounterpart)
+        uniqueIds.push (webhookHandler.getUniqueEntityServiceId (localCounterpart))
     })
-    // add counterparts
-    const counterparts = []
-    for (let i = 0; i < issues.length; ++i) {
-      const issue = issues[i]
-      const counterpart = webhookHandler.getOtherEntity (issue)
-      if (counterpart)
-        counterparts.push (counterpart)
-    }
-    return issues.concat (counterparts)
+
+    return issues.filter ((issue) => {
+      const uniqueId = webhookHandler.getUniqueEntityServiceId (issue)
+      return uniqueIds.indexOf (uniqueId) !== -1
+    })
   },
 
   getEntitiesWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {
@@ -608,8 +607,8 @@ export const webhookHandler = {
   },
 
   addToMapping: (entity: Entity, assign: Object = {}) => {
-    // todo, babel typeof..
-    const mappings = webhookHandler.getIsComment (entity) ? store.commentMappings : store.issueMappings
+    const mappings = webhookHandler.getIsComment (entity) ?
+      store.commentMappings : store.issueMappings
 
     if (webhookHandler.getIsOriginal (entity)) {
       mappings.add (entity, undefined, {
