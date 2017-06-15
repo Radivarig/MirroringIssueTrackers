@@ -422,9 +422,10 @@ export const webhookHandler = {
     for (let i = 0; i < issues.length; ++i) {
       const issue = issues[i]
       const counterpart = webhookHandler.getOtherEntity (issue)
-      counterparts.push (counterpart)
+      if (counterpart)
+        counterparts.push (counterpart)
     }
-    return issues.concat (counterparts.filter (Boolean))
+    return issues.concat (counterparts)
   },
 
   getEntitiesWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {
