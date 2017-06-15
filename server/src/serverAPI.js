@@ -295,6 +295,8 @@ export const webhookHandler = {
       }
     }
 
+    issues.forEach (webhookHandler.removeIssueFromQueue)
+
     mirroringInProgress = false
     if (redoMirroring) {
       // keepTiming = true //todo
