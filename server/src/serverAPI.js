@@ -181,8 +181,6 @@ export const webhookHandler = {
       keepTiming = true
     }
 
-    let areIssuesChanged = false
-
     // call doSingleEntity one by one issue
     // todo sort mirrors first to proritize removing deleted issues
     const issuesMirrorsFirst = webhookHandler.getEntitiesWithOriginalsFirst (issues).reverse()
@@ -204,26 +202,17 @@ export const webhookHandler = {
       const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (issue, otherEntity)
 
       if (actionTaken === "deleted") {
-        log ("removing mapping", webhookHandler.entityLog (issue))
         webhookHandler.removeMappingContaining (issue)
+        webhookHandler.removeIssueFromQueue (issue)
       }
-      else if (["created", "updated"].indexOf (actionTaken) !== -1)
-        areIssuesChanged = true
 
       // todo, refactor lastAction
-      if (areIssuesChanged || actionTaken === "skipped_equal")
+      if (["created", "updated", "skipped_equal"].indexOf (actionTaken) !== -1)
         webhookHandler.addToMapping (issue, {lastAction: actionTaken})
 
       if (actionTaken === "created")
         // setting true to indicate that the mirror has been requested
         webhookHandler.addToMapping (issue, {waitingForMirror: true})
-    }
-
-    if (areIssuesChanged) {
-      log ("Issue actions made".grey, "restarting".cyan)
-      mirroringInProgress = false
-      await webhookHandler.doMirroring ()
-      return
     }
 
     if (issues.length === 0) {
@@ -276,7 +265,6 @@ export const webhookHandler = {
         const actionTaken: DoSingleEntityAction = await webhookHandler.doSingleEntity (comment, otherEntity)
 
         if (actionTaken === "deleted") {
-          log ("removing mapping", webhookHandler.entityLog (comment))
           webhookHandler.removeMappingContaining (comment)
         }
         else if (["created", "updated", "skipped_equal"].indexOf (actionTaken) !== -1)
