@@ -27,8 +27,8 @@ import settings from "../config/settings.config"
 import Store from './Store'
 const store = new Store ()
 
-import UsernameMapping, {KnownUsernameInfo} from './UsernameMapping'
-import usernameInfos from '../config/usernameInfos'
+import UsernameMapping, {UsernameInfo, KnownUsernameInfo} from './UsernameMapping'
+const usernameInfos: Array<UsernameInfo> = require('../config/usernames.config').default
 const usernameMapping = new UsernameMapping (usernameInfos)
 
 let redoMirroring: boolean = false
