@@ -31,7 +31,6 @@ export class Mapping {
               return false
             }
           }
-          console.log ("removing mapping", s)
           return true
         }
       )[0] !== undefined
