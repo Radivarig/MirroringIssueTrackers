@@ -42,13 +42,14 @@ export class Mapping {
     for (let i = 0; i < this.mappings.length; ++i) {
       const mapping: EntityMapping = this.mappings[i]
 
-      const alreadyExists = mapping.services.filter ((f) =>
-        f.service === newEntity.service && f.id === newEntity.id
-      )[0]
-
-      if (alreadyExists) {
-        Object.assign (mapping, assignToMapping)
-        return
+      for (let j = 0; j < mapping.services.length; ++j) {
+        const s = mapping.services[j]
+        // if already exist
+        if (s.service === newEntity.service && s.id === newEntity.id) {
+          Object.assign (mapping, assignToMapping)
+          Object.assign (s, newEntity)
+          return
+        }
       }
 
       const knownMatch = knownEntityService && mapping.services.filter ((f) =>
