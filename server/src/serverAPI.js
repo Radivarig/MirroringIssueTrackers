@@ -724,13 +724,8 @@ export const webhookHandler = {
     return s
   },
 
-  getNameQuote: (entity: Entity, targetService: string): string => {
-    let nameQuote = `>@${entity.author}`
-    switch (targetService) {
-      case "youtrack": nameQuote = `{html}${nameQuote}{html}`
-    }
-    return `${nameQuote} commented:\n\n`
-  },
+  getNameQuote: (entity: Entity, targetService: string): string =>
+    `>@${entity.author} commented:\n\n`,
 
   getPreparedMirrorCommentForUpdate: (comment: IssueComment, targetService: string): Entity => {
     const nameQuote = webhookHandler.getNameQuote (comment, targetService)
