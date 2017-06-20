@@ -1,4 +1,5 @@
 import {
+  Entity,
   EntityService,
   EntityMapping,
 } from "./types"
@@ -21,25 +22,34 @@ export class Mapping {
     }
   }
 
-  removeMappingContaining (knownEntityService: EntityService) {
+  removeMappingContaining (containsObj: Object) {
     this.mappings = this.mappings.filter ((m) => {
-      const mappingContainsKnownService = m.services.filter (
-        (s) => s.id === knownEntityService.id && s.value === knownEntityService.value)[0] !== undefined
-      return !mappingContainsKnownService
+      const serviceContainsAllProperties = m.services.filter (
+        (s) => {
+          for (const p in containsObj) {
+            if (s[p] !== containsObj[p]) {
+              return false
+            }
+          }
+          return true
+        }
+      )[0] !== undefined
+      return !serviceContainsAllProperties
     })
   }
 
-  add (newEntityService: EntityService, knownEntityService: EntityService | void, assignToMapping: Object = {}) {
+  add (newEntity: Entity, knownEntityService: EntityService | void, assignToMapping: Object = {}) {
     for (let i = 0; i < this.mappings.length; ++i) {
       const mapping: EntityMapping = this.mappings[i]
 
-      const alreadyExists = mapping.services.filter ((f) =>
-        f.service === newEntityService.service && f.id === newEntityService.id
-      )[0]
-
-      if (alreadyExists) {
-        Object.assign (mapping, assignToMapping)
-        return
+      for (let j = 0; j < mapping.services.length; ++j) {
+        const s = mapping.services[j]
+        // if already exist
+        if (s.service === newEntity.service && s.id === newEntity.id) {
+          Object.assign (mapping, assignToMapping)
+          Object.assign (s, newEntity)
+          return
+        }
       }
 
       const knownMatch = knownEntityService && mapping.services.filter ((f) =>
@@ -50,7 +60,7 @@ export class Mapping {
         // assign
         Object.assign (mapping, assignToMapping)
         // append service
-        mapping.services.push (newEntityService)
+        mapping.services.push (newEntity)
         return
       }
     }
@@ -66,7 +76,7 @@ export class Mapping {
     // fill services
     if (knownEntityService)
       newEntityMapping.services.push (knownEntityService)
-    newEntityMapping.services.push (newEntityService)
+    newEntityMapping.services.push (newEntity)
 
     // assign
     Object.assign (newEntityMapping, assignToMapping)
