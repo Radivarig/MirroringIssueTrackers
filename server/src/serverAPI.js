@@ -16,6 +16,11 @@ import helpers from "./helpers"
 
 // import auth from "../config/auth.config"
 const auth: AuthConfig = require ("../config/auth.config").default
+import {
+  services,
+  forceMirroringTag,
+  mirrorMetaVarName,
+} from '../config/const.config'
 
 import settings from "../config/settings.config"
 
@@ -25,16 +30,12 @@ let store = new Store ()
 let redoMirroring: boolean = false
 let redoWasChanged: boolean = false
 let mirroringInProgress: boolean = false
+let testTimestamp: number | void = undefined
 
 const recentlyCreatedIdsObj: Object = {}
 
 let startTime
 let keepTiming
-
-// do not change!
-const mirrorMetaVarName = "MIRROR_META"
-const forceMirroringTag = "forcemirror"
-const services = ["github", "youtrack"]
 
 const log = (...args) => {
   // skip lines containing with
@@ -72,7 +73,10 @@ export const webhookHandler = {
 
   },
 
-  initDoMirroring: async () => {
+  initDoMirroring: async (opts: Object = {}) => {
+    if (opts.testTimestamp !== undefined)
+      testTimestamp = opts.testTimestamp
+
     startTime = startTime || new Date ().getTime ()
     keepTiming = false
     await webhookHandler.doMirroring ()
@@ -104,7 +108,7 @@ export const webhookHandler = {
 
     // get all issues
     await Promise.all (services.map (async (service) => {
-      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service)
+      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service, testTimestamp)
 
       log ("Issues count", service, projectIssues.length)
 
@@ -391,10 +395,16 @@ export const webhookHandler = {
       m.services.filter ((s) => s.service === entityService.service && s.id === entityService.id)[0])[0]
   },
 
-  getProjectIssues: async (sourceService: string) => {
+  getProjectIssues: async (sourceService: string, sinceTimestamp: number | void) => {
+    const query = {}
+
     switch (sourceService) {
       case "youtrack": {
-        const query = {max: 10000}
+        query.max = 100000
+
+        if (sinceTimestamp !== undefined)
+          query.updatedAfter = sinceTimestamp
+
         return await webhookHandler.getProjectIssuesRaw (sourceService, query)
       }
       case "github": {
@@ -408,12 +418,13 @@ export const webhookHandler = {
         const closedIssues = await webhookHandler.getProjectIssuesRaw (sourceService, closedQuery)
         return openIssues.concat (closedIssues)
         */
-        const allMirroringQuery = {
-          state: "all",
-          // labels: "Mirroring",
-          per_page: 100,
-        }
-        return await webhookHandler.getProjectIssuesRaw (sourceService, allMirroringQuery)
+        query.state = "all"
+        query.per_page = 100
+
+        if (sinceTimestamp !== undefined)
+          query.since = new Date(sinceTimestamp).toISOString()
+
+        return await webhookHandler.getProjectIssuesRaw (sourceService, query)
       }
     }
   },
@@ -517,8 +528,10 @@ export const webhookHandler = {
     return await webhookHandler.getIssue (targetEntityService.service, targetEntityService.id)
   },
 
-  getIsOriginal: (issueOrComment: Issue | IssueComment): boolean =>
-    issueOrComment.body.indexOf (mirrorMetaVarName) === -1,
+  getIsOriginal: (issueOrComment: Issue | IssueComment): boolean => {
+    const meta = webhookHandler.getMeta (issueOrComment)
+    return meta === undefined
+  },
 
   addToMapping: (entity: Entity, assign: Object = {}) => {
     // todo, babel typeof..
@@ -1202,6 +1215,54 @@ export const webhookHandler = {
 
   },
 
+  createMirrorComment: async (comment: IssueComment) => {
+    await Promise.all (services.map (async (targetService) => {
+      if (targetService === comment.service)
+        return
+
+      const knownIssueService: EntityService = {
+        service: comment.service,
+        id: comment.issueId,
+      }
+      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
+
+      if (!targetIssueService) {
+        log ("No comment issue found", {comment, targetService})
+        throw "Error"
+      }
+
+      const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
+
+      await webhookHandler.createComment (preparedComment, targetService, targetIssueService.id)
+    }))
+  },
+
+  createComment: async (comment: IssueComment, targetService: string, targetIssueId: string) => {
+    const restParams = {
+      service: targetService,
+      method: "post",
+    }
+
+    switch (targetService) {
+      case "youtrack":
+        restParams.url = `issue/${targetIssueId}/execute`
+        restParams.query = {
+          comment: comment.body,
+        }
+        break
+      case "github":
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueId}/comments`
+        restParams.data = {
+          body: comment.body,
+        }
+        break
+    }
+
+    await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
+  },
+
   getUniqueEntityServiceId: (entityService: EntityService): string =>
     [entityService.service, entityService.id, entityService.issueId].join ("_"),
 
@@ -1226,35 +1287,31 @@ export const webhookHandler = {
     recentlyCreatedIdsObj[id] = true
   },
 
-  // todo: rename to createMirrors in case of third service
   createMirror: async (entity: Entity) => {
-    // temporary prevent issue creation from github service
-    if (!entity.issueId && entity.service === "github") {
-      log ("temporary disabled gh -> yt")
+    webhookHandler.throwOnCreationRecursion (entity)
+    if (webhookHandler.getIsComment (entity))
+      return await webhookHandler.createMirrorComment (entity)
+    return await webhookHandler.createMirrorIssue (entity)
+  },
+
+  createMirrorIssue: async (sourceIssue: Issue) => {
+    if (process.env.ENV !== "test" && sourceIssue.service === "github") {
+      log ("temporary disabled gh->yt")
       return
     }
 
     await Promise.all (services.map (async (targetService) => {
-      if (targetService === entity.service)
+      if (targetService === sourceIssue.service)
         return
 
-      await webhookHandler.createEntity (entity, targetService)
+      const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
+
+      await webhookHandler.createIssue (preparedIssue, targetService)
     }))
+
   },
 
-  createEntity: async (entity: Entity, targetService: string) => {
-    // todo: in case of third service, add target service to throwOnCreationRecursion
-    webhookHandler.throwOnCreationRecursion (entity)
-
-    if (webhookHandler.getIsComment (entity))
-      return await webhookHandler.createComment (entity, targetService)
-
-    return await webhookHandler.createIssue (entity, targetService)
-  },
-
-  createIssue: async (sourceIssue: Issue, targetService: string) => {
-    const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
-
+  createIssue: async (issue: Issue, targetService: string) => {
     const restParams = {service: targetService}
 
     switch (targetService) {
@@ -1262,10 +1319,9 @@ export const webhookHandler = {
         restParams.method = "post"
         restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
         restParams.data = {
-          title: preparedIssue.title,
-          body: preparedIssue.body,
-          // github bug, creates multiple same labels
-          // labels: preparedIssue.labels,
+          title: issue.title,
+          body: issue.body,
+          labels: issue.labels,
         }
         break
       }
@@ -1275,56 +1331,87 @@ export const webhookHandler = {
         restParams.query = {
           // todo: move to sourceIssue.project
           project: auth.youtrack.project,
-          summary: preparedIssue.title,
-          description: preparedIssue.body,
+          summary: issue.title,
+          description: issue.body,
         }
         break
       }
     }
 
-    return await integrationRest (restParams)
+    await integrationRest (restParams)
     .then ((response) => response.body)
     .catch ((err) => {throw err})
+
   },
 
-  createComment: async (sourceComment: IssueComment, targetService: string) => {
-    const knownIssueService: EntityService = {
-      service: sourceComment.service,
-      id: sourceComment.issueId,
-    }
-
-    const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
-
-    if (!targetIssueService) {
-      log ("No comment issue found", {sourceComment, targetService})
-      throw "Error"
-    }
-
-    const preparedComment: IssueComment =
-      webhookHandler.getPreparedMirrorCommentForUpdate (sourceComment, targetService)
-
+  projectExist: async (projName: string, targetService: string): boolean => {
     const restParams = {
       service: targetService,
-      method: "post",
+      method: "get",
     }
 
     switch (targetService) {
       case "youtrack":
-        restParams.url = `issue/${targetIssueService.id}/execute`
-        restParams.query = {
-          comment: preparedComment.body,
-        }
+        restParams.url = `project/all`
         break
       case "github":
-        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
-        restParams.data = {
-          body: preparedComment.body,
-        }
+        restParams.url = `repos/${auth.github.user}/${projName}`
         break
     }
 
-    await integrationRest (restParams)
-    .then ((response) => response.body)
-    .catch ((err) => {throw err})
+    const project = await integrationRest (restParams)
+      .then ((response) => response.body)
+      .catch ((err) => {
+        if (err.status !== 404)
+          throw err
+      })
+
+    if (!project)
+      return false
+
+    if (targetService === "github" && project.name.toLowerCase () !== projName.toLowerCase ())
+      return false
+
+    if (targetService === "youtrack" &&
+      project.filter ((proj) => proj.shortName === projName).length === 0)
+      return false
+
+    return true
+  },
+
+  throwIfAnyProjectNotExist: async () => {
+    await Promise.all (services.map (async (service) => {
+      const projName = auth[service].project
+
+      const projExist = await webhookHandler.projectExist (projName, service)
+      if (!projExist)
+        throw `Test ${service} repository|project not found: ${projName}`
+    }))
+  },
+
+  generateRandomIssue: (service: string): Issue => {
+    const issue: Issue = {
+      id: Math.random ().toString (),
+      title: Math.random ().toString (),
+      body: Math.random ().toString (),
+      service,
+    }
+
+    // switch (service) {} // fill additional
+
+    return issue
+  },
+
+  generateRandomComment: (service: string): IssueComment => {
+    const comment: IssueComment = {
+      id: Math.random ().toString (),
+      body: Math.random ().toString (),
+      issueId: Math.random ().toString (),
+      service,
+    }
+
+    // switch (service) {} // fill additional
+
+    return comment
   },
 }

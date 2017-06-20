@@ -38,5 +38,5 @@ export default async (opts) => {
     .set (toSet)
     .query (query)
     .send (data)
-    .on ("error", (err) => {console.log (method, service, requestUrl, query, data); throw err})
+    // .on ("error", (err) => {console.log (method, service, requestUrl, query, data)})
 }
