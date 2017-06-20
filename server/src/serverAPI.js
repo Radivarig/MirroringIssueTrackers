@@ -27,6 +27,10 @@ import settings from "../config/settings.config"
 import Store from './Store'
 const store = new Store ()
 
+import UsernameMapping, {UsernameInfo, KnownUsernameInfo} from './UsernameMapping'
+const usernameInfos: Array<UsernameInfo> = require('../config/usernames.config').default
+const usernameMapping = new UsernameMapping (usernameInfos)
+
 let redoMirroring: boolean = false
 let redoWasChanged: boolean = false
 let mirroringInProgress: boolean = false
@@ -129,9 +133,6 @@ export const webhookHandler = {
   // call doSingleEntity for each issue,
   // for each issue, call doSingleEntity for all comments.
   doMirroring: async () => {
-    // wait to reduce frequency of requests.. github will return Forbidden
-    await helpers.asyncTimeout (1000)
-
     if (mirroringInProgress) {
       redoMirroring = true
       redoWasChanged = true
@@ -140,13 +141,15 @@ export const webhookHandler = {
     redoMirroring = false
     mirroringInProgress = true
 
+    // wait to reduce frequency of requests.. github will return Forbidden
+    await helpers.asyncTimeout (1000)
+
     let issues: Array<Issue> = []
     const allIssues = await webhookHandler.getAllIssues ()
 
     if (webhookHandler.getIssuesQueue ().length !== 0) {
       issues = webhookHandler.filterQueuedIssuesAndCounterparts (allIssues)
-
-      // remove all comment mappings to refetch them
+      // remove comment mappings to refetch them
       issues.forEach ((issue) => {
         webhookHandler.removeMappingContaining ({issueId: issue.id})
       })
@@ -720,20 +723,15 @@ export const webhookHandler = {
     return s
   },
 
-  getNameQuote: (entity: Entity, targetService: string): string => {
-    let nameQuote = `<blockquote>@${entity.author}</blockquote>`
-    switch (targetService) {
-      case "youtrack": nameQuote = `{html}${nameQuote}{html}`
-    }
-    return `${nameQuote}\n\n`
-  },
+  getNameQuote: (entity: Entity, targetService: string): string =>
+    `>@${entity.author} commented:\n\n`,
 
   getPreparedMirrorCommentForUpdate: (comment: IssueComment, targetService: string): Entity => {
     const nameQuote = webhookHandler.getNameQuote (comment, targetService)
     const signature: string = webhookHandler.getMirrorSignature (comment.service, targetService, comment)
 
     const convertedBody =
-      webhookHandler.convertMentions (nameQuote + comment.body, targetService)
+      webhookHandler.convertMentions (nameQuote + comment.body, comment.service, targetService)
 
     return {
       ...comment,
@@ -748,8 +746,39 @@ export const webhookHandler = {
     }
   },
 
-  convertMentions (body: string, targetService: string): string {
-    return body.replace (/\B@/ig, ((match) => "@'"))
+  removeNonLettersFromEnd: (str: string): string => {
+    while (str !== "" && str[str.length - 1].match(/[a-z0-9]/i) === null)
+      str = str.substring (0, str.length - 1)
+    return str || ""
+  },
+
+  convertMentions: (body, sourceService, targetService): string =>
+    webhookHandler.convertMentionsRaw (body, sourceService, targetService, usernameMapping),
+
+  convertMentionsRaw: (body: string, sourceService: string, targetService: string,
+    _usernameMapping: UsernameMapping): string => {
+    const replacedBody = body.replace (/\B@[a-z0-9.]+/ig, ((m) => {
+      // remove @ symbol
+      m = m.substring (1)
+
+      const username = m && webhookHandler.removeNonLettersFromEnd (m)
+
+      if (username) {
+        const knownUsernameInfo: KnownUsernameInfo = {
+          username,
+          service: sourceService,
+        }
+        const counterpartUsername = _usernameMapping.getUsername (knownUsernameInfo, targetService)
+
+        if (counterpartUsername)
+          return `@${counterpartUsername}`
+      }
+
+      // else break mention
+      return `@'${m}`
+    }))
+
+    return replacedBody
   },
 
   getPreparedMirrorEntityForUpdate: (entity: Entity, targetService: string): Entity => {
@@ -772,7 +801,7 @@ export const webhookHandler = {
     const nameQuote = webhookHandler.getNameQuote (issue, targetService)
     const titlePrefix = webhookHandler.getTitlePrefix (issue, targetService)
 
-    const convertedBody = webhookHandler.convertMentions (nameQuote + issue.body, targetService)
+    const convertedBody = webhookHandler.convertMentions (nameQuote + issue.body, issue.service, targetService)
 
     return {
       ...issue,
