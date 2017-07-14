@@ -20,6 +20,7 @@ import {
   services,
   forceMirroringTag,
   mirrorMetaVarName,
+  closedStateField,
 } from '../config/const.config'
 
 import settings from "../config/settings.config"
@@ -399,6 +400,16 @@ export const webhookHandler = {
 
     // if has original
     if (otherEntity) {
+       // if youtrack mirror fields have been changed update github original labels
+      if (otherEntity.service === "github") {
+        // yt mirror as prepared entity
+        const preparedMirror: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (entity, otherEntity.service)
+
+        if (!webhookHandler.areLabelsEqual (preparedMirror.labels, otherEntity.labels)) {
+          await webhookHandler.updateMirror (entity, {labelsOnly: true})
+          return "updated"
+        }
+      }
         // nothing, original will be called from doMirroring
       log ("Skip mirror".grey, webhookHandler.entityLog (entity),
         "of".grey, webhookHandler.entityLog (otherEntity))
@@ -821,6 +832,9 @@ export const webhookHandler = {
       listB.filter ((b) => listA.indexOf (b) === -1).length === 0
     ),
 
+  areLabelsEqual: (l1: Array = [], l2: Array = []): boolean =>
+    webhookHandler.doListsContainSameElements (l1, l2),
+
   getIsOriginalEqualToMirror: (originalEntity: Entity, mirrorEntity: Entity): boolean => {
     const preparedOriginal: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (originalEntity, mirrorEntity.service)
 
@@ -829,8 +843,7 @@ export const webhookHandler = {
       return preparedOriginal.body === mirrorEntity.body
 
     // issue
-    const areLabelsEqual = webhookHandler.doListsContainSameElements (
-      preparedOriginal.labels || [], mirrorEntity.labels || [])
+    const areLabelsEqual = webhookHandler.areLabelsEqual (preparedOriginal.labels, mirrorEntity.labels)
 
     const areEqual = (
       preparedOriginal.title === mirrorEntity.title &&
@@ -922,10 +935,10 @@ export const webhookHandler = {
       // remove from store: orig and mirrors
   },
 
-  updateMirror: async (entity: Entity) => {
+  updateMirror: async (entity: Entity, opts: Object = {}) => {
     if (webhookHandler.getIsComment (entity))
       await webhookHandler.updateMirrorComment (entity)
-    else await webhookHandler.updateMirrorIssue (entity)
+    else await webhookHandler.updateMirrorIssue (entity, opts)
   },
 
   updateMirrorComment: async (comment: IssueComment) => {
@@ -1245,7 +1258,7 @@ export const webhookHandler = {
     return `\n\n${entityHtmlComment}`
   },
 
-  updateMirrorIssue: async (sourceIssue: Issue) => {
+  updateMirrorIssue: async (sourceIssue: Issue, opts: Object = {}) => {
 
     services.forEach (async (targetService) => {
       if (targetService === sourceIssue.service)
@@ -1271,7 +1284,13 @@ export const webhookHandler = {
           restParams.method = "patch"
           restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetEntityService.id}`
 
-          restParams.data = {
+          if (opts.labelsOnly) {
+            restParams.data = {
+              labels: preparedIssue.labels,
+              state: preparedIssue.state,
+            }
+          }
+          else restParams.data = {
             title: preparedIssue.title,
             body: preparedIssue.body,
             labels: preparedIssue.labels,
@@ -1294,8 +1313,7 @@ export const webhookHandler = {
             method: "post",
             url: `issue/${targetEntityService.id}/execute`,
             query: {
-              // TODO move this to config and allow custom youtrack state field string for from UI
-              command: `State ${preparedIssue.state === "open" ? "Open" : "Verified"}`,
+              command: `State ${preparedIssue.state === "open" ? "Open" : closedStateField}`,
             },
           }
 
@@ -1396,10 +1414,10 @@ export const webhookHandler = {
 
   createMirrorIssue: async (sourceIssue: Issue) => {
     // eslint-disable-next-line no-undef
-    if (process.env.ENV !== "test" && sourceIssue.service === "github") {
+    /*if (process.env.ENV !== "test" && sourceIssue.service === "github") {
       log ("temporary disabled gh->yt")
       return
-    }
+    }*/
 
     await Promise.all (services.map (async (targetService) => {
       if (targetService === sourceIssue.service)
