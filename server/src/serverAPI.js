@@ -1099,9 +1099,10 @@ export const webhookHandler = {
   },
 
   getLabelsFromTags: (tags/*: Array<{name: string, value: string}>*/): Array<string> =>
-    tags.map ((tag) =>
-      // add here handles for field.specialAttr
-       `Tag:${tag}`),
+    tags.map ((tag) => {
+      if (tag !== "Star")
+        return `Tag:${tag}`
+    }).filter (Boolean),
 
   getLabelsFromFields: (fields/*: Array<{name: string, value: string}>*/): Array<string> =>
     fields.map ((field) =>
