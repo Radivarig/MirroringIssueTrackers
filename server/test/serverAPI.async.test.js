@@ -56,7 +56,7 @@ describe('getProjectIssues', async () => {
       // create one issue before timestamp
       await webhookHandler.createIssue (issueA, service)
 
-      const timestampMismatch = 10000
+      const timestampMismatch = 15000
       await helpers.asyncTimeout (timestampMismatch)
 
       const sinceTimestamp = new Date ().getTime ()
