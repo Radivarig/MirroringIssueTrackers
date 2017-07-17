@@ -338,7 +338,7 @@ export const webhookHandler = {
 
       switch (service) {
         case "youtrack": {
-          filteredIssues = projectIssues.reverse ().filter ((issue) => {
+          filteredIssues = projectIssues.filter ((issue) => {
             const isOriginal = webhookHandler.getIsOriginal (issue)
             if (isOriginal === false)
               return true
@@ -360,7 +360,7 @@ export const webhookHandler = {
           break
         }
         case "github": {
-          filteredIssues = projectIssues.filter ((issue) => {
+          filteredIssues = projectIssues.reverse ().filter ((issue) => {
             if (webhookHandler.getIsOriginal (issue))
               return true
 
