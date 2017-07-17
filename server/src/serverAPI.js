@@ -417,7 +417,7 @@ export const webhookHandler = {
         const preparedMirror: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (entity, otherEntity.service)
 
         if (!webhookHandler.areLabelsEqual (preparedMirror.labels, otherEntity.labels)) {
-          await webhookHandler.updateMirror (entity, {labelsOnly: true})
+          await webhookHandler.updateMirror (entity, {skipTitle: true, skipBody: true})
           return "updated"
         }
       }
@@ -1292,26 +1292,21 @@ export const webhookHandler = {
 
       const preparedIssue: Issue = await webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
+      const skipTitle: boolean = opts.skipTitle || isPostCreation
+      const skipBody: boolean = opts.skipBody || isPostCreation
+
       switch (sourceIssue.service) {
         case "youtrack": {
           restParams.method = "patch"
           restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetEntityService.id}`
 
-          // don't update title or body
-          if (opts.labelsOnly || isPostCreation) {
-            restParams.data = {
-              labels: preparedIssue.labels,
-              state: preparedIssue.state,
-            }
+          restParams.data = {
+            labels: preparedIssue.labels,
+            state: preparedIssue.state,
           }
-          else {
-            restParams.data = {
-              title: preparedIssue.title,
-              body: preparedIssue.body,
-              labels: preparedIssue.labels,
-              state: preparedIssue.state,
-            }
-          }
+          if (!skipTitle) restParams.data.title = preparedIssue.title
+          if (!skipBody) restParams.data.body = preparedIssue.body
+
           break
         }
         case "github": {
