@@ -149,9 +149,11 @@ export const webhookHandler = {
     const allIssues = await webhookHandler.getAllIssues ()
 
     if (webhookHandler.getIssuesQueue ().length !== 0) {
-      issues = webhookHandler.filterQueuedIssuesAndCounterparts (allIssues)
-      // remove comment mappings to refetch them
-      issues.forEach ((issue) => {
+      issues = webhookHandler.getQueuedIssues (allIssues)
+      const counterparts = webhookHandler.getCounterparts (issues)
+
+      // remove mappings to refetch them
+      issues.concat (counterparts).forEach ((issue) => {
         webhookHandler.removeMappingContaining ({issueId: issue.id})
       })
     }
@@ -161,7 +163,7 @@ export const webhookHandler = {
     await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (issues).map (async (issue) => {
       log ("Mapping".grey, webhookHandler.entityLog (issue))
 
-      const isMirror = webhookHandler.getIsOriginal (issue) === false
+      const isMirror = !webhookHandler.getIsOriginal (issue)
 
       const toApply = {}
 
@@ -186,14 +188,12 @@ export const webhookHandler = {
       keepTiming = true
     }
 
-    // call doSingleEntity one by one issue
-    // todo sort mirrors first to proritize removing deleted issues
-    const issuesMirrorsFirst = webhookHandler.getEntitiesWithOriginalsFirst (issues).reverse()
 
     let newIssuesCreated = false
 
-    for (let i = 0; i < issuesMirrorsFirst.length; ++i) {
-      const issue = issuesMirrorsFirst[i]
+    // call doSingleEntity one by one issue
+    for (let i = 0; i < issues.length; ++i) {
+      const issue = issues[i]
 
       const issueMapping = webhookHandler.getEntityServiceMapping (issue)
       const lastAction = issueMapping && issueMapping.lastAction
@@ -401,27 +401,25 @@ export const webhookHandler = {
         await webhookHandler.updateMirror (entity)
         return "updated"
       }
-
-      log ("Create mirror of".magenta, webhookHandler.entityLog (entity))
-      await webhookHandler.createMirror (entity)
-        // return true to indicate a change that will redo doMapping
-      return "created"
+      else {
+        log ("Create mirror of".magenta, webhookHandler.entityLog (entity))
+        await webhookHandler.createMirror (entity)
+        return "created"
+      }
     }
     // else is mirror
 
     // if has original
     if (otherEntity) {
-       // if youtrack mirror fields have been changed update github original labels
-      if (otherEntity.service === "github") {
-        // yt mirror as prepared entity
-        const preparedMirror: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (entity, otherEntity.service)
+      const preparedMirror: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (entity, otherEntity.service)
 
-        if (!webhookHandler.areLabelsEqual (preparedMirror.labels, otherEntity.labels)) {
-          await webhookHandler.updateMirror (entity, {skipTitle: true, skipBody: true})
-          return "updated"
-        }
+      if (!webhookHandler.areLabelsEqual (preparedMirror.labels, otherEntity.labels) ||
+        preparedMirror.state !== otherEntity.state) {
+        await webhookHandler.updateMirror (entity, {skipTitle: true, skipBody: true})
+        return "updated"
       }
-        // nothing, original will be called from doMirroring
+
+      // nothing, original will be called from doMirroring
       log ("Skip mirror".grey, webhookHandler.entityLog (entity),
         "of".grey, webhookHandler.entityLog (otherEntity))
       return "skipped_mirror"
@@ -434,17 +432,22 @@ export const webhookHandler = {
     return "deleted"
   },
 
-  filterQueuedIssuesAndCounterparts: (issues: Array<Issue>): Array<Issue> => { {/*fix for syntax highlighting*/}
+  getCounterparts: (issues: Array<Issue>): Array<Issue> => {
     const uniqueIds: Array<string> = []
-    webhookHandler.getIssuesQueue ().forEach ((issue) => {
-      // add queued issue id
-      uniqueIds.push (webhookHandler.getUniqueEntityServiceId (issue))
-
-      // add queued issue counterpart id
+    issues.forEach (issue => {
       const localCounterpart = webhookHandler.getOtherEntity (issue)
       if (localCounterpart)
         uniqueIds.push (webhookHandler.getUniqueEntityServiceId (localCounterpart))
     })
+    return issues.filter ((issue) => {
+      const uniqueId = webhookHandler.getUniqueEntityServiceId (issue)
+      return uniqueIds.indexOf (uniqueId) !== -1
+    })
+  },
+
+  getQueuedIssues: (issues: Array<Issue>): Array<Issue> => {
+    const uniqueIds: Array<string> = webhookHandler.getIssuesQueue ().map ((issue) =>
+      webhookHandler.getUniqueEntityServiceId (issue))
 
     return issues.filter ((issue) => {
       const uniqueId = webhookHandler.getUniqueEntityServiceId (issue)
@@ -1292,8 +1295,8 @@ export const webhookHandler = {
 
       const preparedIssue: Issue = await webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
-      const skipTitle: boolean = opts.skipTitle || isPostCreation
-      const skipBody: boolean = opts.skipBody || isPostCreation
+      const skipTitle = opts.skipTitle || isPostCreation
+      const skipBody = opts.skipBody || isPostCreation
 
       switch (sourceIssue.service) {
         case "youtrack": {
