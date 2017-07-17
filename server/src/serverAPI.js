@@ -411,12 +411,15 @@ export const webhookHandler = {
 
     // if has original
     if (otherEntity) {
-      const preparedMirror: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (entity, otherEntity.service)
 
-      if (!webhookHandler.areLabelsEqual (preparedMirror.labels, otherEntity.labels) ||
-        preparedMirror.state !== otherEntity.state) {
-        await webhookHandler.updateMirror (entity, {skipTitle: true, skipBody: true})
-        return "updated"
+      if (!webhookHandler.getIsComment (entity)) {
+        const preparedMirror: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (entity, otherEntity.service)
+
+        if (!webhookHandler.areLabelsEqual (preparedMirror.labels, otherEntity.labels) ||
+          preparedMirror.state !== otherEntity.state) {
+          await webhookHandler.updateMirror (entity, {skipTitle: true, skipBody: true})
+          return "updated"
+        }
       }
 
       // nothing, original will be called from doMirroring
