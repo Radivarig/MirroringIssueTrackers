@@ -236,7 +236,8 @@ export const webhookHandler = {
     else {
       const allComments: Array<IssueComment> = []
       // get all comments
-      await Promise.all (issues.concat (counterparts).map (async (issue) => {
+      issues = issues.concat (counterparts)
+      await Promise.all (issues.map (async (issue) => {
         // fetching issue comments
   /*
         //bug: youtrack not including recently created comment
@@ -295,8 +296,8 @@ export const webhookHandler = {
           }
           */
         }
+        webhookHandler.removeIssueFromQueue (issue)
       }
-      issues.forEach (webhookHandler.removeIssueFromQueue)
     }
 
     mirroringInProgress = false
