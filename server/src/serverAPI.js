@@ -146,11 +146,12 @@ export const webhookHandler = {
     await helpers.asyncTimeout (1000)
 
     let issues: Array<Issue> = []
+    let counterparts: Array<Issue> = []
     const allIssues = await webhookHandler.getAllIssues ()
 
     if (webhookHandler.getIssuesQueue ().length !== 0) {
       issues = webhookHandler.getQueuedIssues (allIssues)
-      const counterparts = webhookHandler.getCounterparts (issues)
+      counterparts = webhookHandler.getCounterparts (allIssues)
 
       // remove mappings to refetch them
       issues.concat (counterparts).forEach ((issue) => {
@@ -187,7 +188,6 @@ export const webhookHandler = {
         (entityService) => webhookHandler.entityLog (entityService)).join (", "))
       keepTiming = true
     }
-
 
     let newIssuesCreated = false
 
@@ -236,7 +236,7 @@ export const webhookHandler = {
     else {
       const allComments: Array<IssueComment> = []
       // get all comments
-      await Promise.all (issues.map (async (issue) => {
+      await Promise.all (issues.concat (counterparts).map (async (issue) => {
         // fetching issue comments
   /*
         //bug: youtrack not including recently created comment
@@ -296,7 +296,6 @@ export const webhookHandler = {
           */
         }
       }
-
       issues.forEach (webhookHandler.removeIssueFromQueue)
     }
 
