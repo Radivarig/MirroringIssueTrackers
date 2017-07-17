@@ -231,6 +231,7 @@ export const webhookHandler = {
 
     if (newIssuesCreated) {
       log ("Created issues during last run".grey, "waiting".cyan)
+      // todo keepTiming
     }
     else {
       const allComments: Array<IssueComment> = []
@@ -1269,17 +1270,18 @@ export const webhookHandler = {
     return `\n\n${entityHtmlComment}`
   },
 
-  updateMirrorIssue: async (sourceIssue: Issue, opts: Object = {}) => {
-
+  updateMirrorIssue: async (sourceIssue: EntityService, opts: Object = {}) => {
     services.forEach (async (targetService) => {
       if (targetService === sourceIssue.service)
         return
 
-      const knownEntityService: EntityService = {
-        service: sourceIssue.service,
-        id: sourceIssue.id,
-      }
-      const targetEntityService: EntityService | void = webhookHandler.getEntityService (knownEntityService, targetService)
+      let targetEntityService: EntityService | void = webhookHandler.getEntityService (sourceIssue, targetService)
+
+      // todo refactor, add updateIssue
+      // this will be passed from createIssue to update state and labels right after creation
+      const isPostCreation = opts.targetEntityService && opts.targetEntityService.service === targetService
+      if (isPostCreation)
+       targetEntityService = opts.targetEntityService
 
       if (!targetEntityService) {
         log (`no target (${targetService}) for (${sourceIssue.service}:${sourceIssue.id})`)
@@ -1295,17 +1297,20 @@ export const webhookHandler = {
           restParams.method = "patch"
           restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetEntityService.id}`
 
-          if (opts.labelsOnly) {
+          // don't update title or body
+          if (opts.labelsOnly || isPostCreation) {
             restParams.data = {
               labels: preparedIssue.labels,
               state: preparedIssue.state,
             }
           }
-          else restParams.data = {
-            title: preparedIssue.title,
-            body: preparedIssue.body,
-            labels: preparedIssue.labels,
-            state: preparedIssue.state,
+          else {
+            restParams.data = {
+              title: preparedIssue.title,
+              body: preparedIssue.body,
+              labels: preparedIssue.labels,
+              state: preparedIssue.state,
+            }
           }
           break
         }
@@ -1441,7 +1446,7 @@ export const webhookHandler = {
 
   },
 
-  createIssue: async (issue: Issue, targetService: string) => {
+  createIssue: async (issue: Issue, targetService: string): string => {
     const restParams = {service: targetService}
 
     switch (targetService) {
@@ -1468,10 +1473,31 @@ export const webhookHandler = {
       }
     }
 
-    await integrationRest (restParams)
-    .then ((response) => response.body)
+    // create issue and get its id
+    const newIssueId: string = await integrationRest (restParams)
+    .then ((response) => {
+      switch (targetService) {
+        case "github": {
+          return response.body.number.toString ()
+        }
+        case "youtrack": {
+          const loc: string = response.headers.location
+          const indexOfLastSlash = loc.lastIndexOf ("/")
+          return loc.substring (indexOfLastSlash + 1)
+        }
+      }
+    })
     .catch ((err) => {throw err})
 
+    // update fields/labels
+    await webhookHandler.updateMirrorIssue (issue, {
+      targetEntityService: {
+        service: targetService,
+        id: newIssueId,
+      }
+    })
+
+    return newIssueId
   },
 
   projectExist: async (projName: string, targetService: string): boolean => {
