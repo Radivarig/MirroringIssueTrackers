@@ -1315,11 +1315,10 @@ export const webhookHandler = {
           restParams.method = "post"
           restParams.url = `issue/${targetEntityService.id}`
           restParams.query = {
-            // todo: move to sourceIssue.project
             project: auth.youtrack.project,
-            summary: preparedIssue.title,
-            description: preparedIssue.body,
           }
+          if (!skipTitle) restParams.query.summary = preparedIssue.title
+          if (!skipBody) restParams.query.description = preparedIssue.body
 
           const applyStateParams = {
             service: targetEntityService.service,
