@@ -1312,14 +1312,17 @@ export const webhookHandler = {
           break
         }
         case "github": {
-          restParams.method = "post"
-          restParams.url = `issue/${targetEntityService.id}`
-          restParams.query = {
-            project: auth.youtrack.project,
+          if (!skipTitle || !skipBody) {
+            restParams.method = "post"
+            restParams.url = `issue/${targetEntityService.id}`
+            restParams.query = {
+              project: auth.youtrack.project,
+            }
+            if (!skipTitle) restParams.query.summary = preparedIssue.title
+            if (!skipBody) restParams.query.description = preparedIssue.body
           }
-          if (!skipTitle) restParams.query.summary = preparedIssue.title
-          if (!skipBody) restParams.query.description = preparedIssue.body
 
+          // todo: shoulnd't this override with "Open" every time.. 
           const applyStateParams = {
             service: targetEntityService.service,
             method: "post",
@@ -1337,6 +1340,10 @@ export const webhookHandler = {
           break
         }
       }
+
+      // if there is nothing to set
+      if (sourceIssue.service === "github" && (skipTitle && skipBody))
+        return
 
       return await integrationRest(restParams)
       .then ((response) => response.body)
