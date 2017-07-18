@@ -26,7 +26,7 @@ app.set('port', process.env.PORT || 7777)
 app.use(compression())
 app.use(allowCrossDomain)
 app.use(bodyParser.json())
-app.use (bodyParser.urlencoded ({ "extended": true }))
+//app.use (bodyParser.urlencoded ({ "extended": true }))
 app.enable('trust proxy')
 
 app.post('/github_webhook', webhookHandler.handleRequest.bind (null, "github"))
