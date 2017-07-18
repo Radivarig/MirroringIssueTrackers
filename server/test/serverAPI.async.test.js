@@ -108,7 +108,7 @@ describe('initDoMirroring', async () => {
       await webhookHandler.createComment (commentA, service, parentIssueId)
       await webhookHandler.createComment (commentB, service, parentIssueId)
 
-      const issueComments = await webhookHandler.getComments (service, parentIssueId)
+      const issueComments = await webhookHandler.getComments ({service, id: parentIssueId})
 
       // test comment creation
       expect (issueComments.length).to.equal (2)
@@ -151,10 +151,10 @@ describe('initDoMirroring', async () => {
         return
 
       // githubIssues is now a mirror
-      const githubComments = await webhookHandler.getComments ("github", githubIssue.id)
+      const githubComments = await webhookHandler.getComments ({service: "github", id: githubIssue.id})
       // get original from mirror meta.id
       const originalId = webhookHandler.getMeta (githubIssue).id
-      const youtrackComments = await webhookHandler.getComments ("youtrack", originalId)
+      const youtrackComments = await webhookHandler.getComments ({service: "youtrack", id: originalId})
 
       expect (githubComments.length).to.equal (youtrackComments.length)
 
