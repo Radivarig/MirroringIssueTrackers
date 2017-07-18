@@ -123,6 +123,8 @@ export const webhookHandler = {
   // call doSingleEntity for each issue,
   // for each issue, call doSingleEntity for all comments.
   doMirroring: async () => {
+    // console.log ("calling initDoMirroring", {mirroringInProgress, issuesQueue})
+
     if (mirroringInProgress) {
       redoMirroring = true
       redoWasChanged = true
@@ -131,8 +133,8 @@ export const webhookHandler = {
     redoMirroring = false
     mirroringInProgress = true
 
-    // wait to reduce frequency of requests.. github will return Forbidden
-    await helpers.asyncTimeout (1000)
+    // wait at start to catch consecutive webhooks
+    await helpers.asyncTimeout (2000)
 
     let issues: Array<Issue> = []
     let counterparts: Array<Issue> = []
@@ -273,7 +275,14 @@ export const webhookHandler = {
       }
     }
 
+    // wait before end to catch late webhooks
+    await helpers.asyncTimeout (2000)
+
     mirroringInProgress = false
+
+    if (webhookHandler.getIssuesQueue ().length === 0)
+      redoMirroring = false
+
     if (redoMirroring) {
       // keepTiming = true //todo
       log ("Received webhook during last run".grey, "restarting".cyan)
@@ -282,22 +291,15 @@ export const webhookHandler = {
       return await webhookHandler.initDoMirroring ()
     }
     else if (!keepTiming) {
-      // if no webhook triggered in the meantime
-      if (redoWasChanged) {
-        // keepTiming = true //todo
-        log ("Possible changes due webhooks", "restarting".cyan)
-        redoWasChanged = false
-        return await webhookHandler.initDoMirroring ()
-      }
-
       log ("Done", webhookHandler.getFormatedTimeFromStart ().yellow)
       startTime = undefined
 
       log ("Continue listening for changes".cyan)
     }
     else {
+      console.log ("..timeout?")
       /*
-      const _timeout = 10000
+      const _timeout = 30000
       await helpers.asyncTimeout (_timeout)
       log ("..timeout?", "Clearing queue and restarting".cyan)
 
@@ -981,6 +983,7 @@ export const webhookHandler = {
     .catch ((err) => {
       if (!err.status === 404)
         throw err
+      log ("caught a 404".red)
     })
 
       // remove from store: orig and mirrors
