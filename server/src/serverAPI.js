@@ -975,7 +975,11 @@ export const webhookHandler = {
     // log ("DELETING", restParams)
     await integrationRest (restParams)
     .then ((response) => response.body)
-    .catch ((err) => {throw err})
+    // TODO: temporary fix for double delete request
+    .catch ((err) => {
+      if (!err.status === 404)
+        throw err
+    })
 
       // remove from store: orig and mirrors
   },
