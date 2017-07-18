@@ -37,7 +37,6 @@ let redoWasChanged: boolean = false
 let mirroringInProgress: boolean = false
 let testTimestamp: number | void = undefined
 
-let isIssuesQueueLocked: boolean = false
 let issuesQueue: Array<EntityService> = []
 
 const recentlyCreatedIdsObj: Object = {}
@@ -79,36 +78,27 @@ export const webhookHandler = {
     }
   },
 
-  operationOnQueue: async (callback: Function) => {
-    // eslint-disable-next-line no-unmodified-loop-condition
-    while (isIssuesQueueLocked)
-      await helpers.asyncTimeout (10)
-    isIssuesQueueLocked = true
-    await callback ()
-    isIssuesQueueLocked = false
+  addIssueToQueue: (issue: EntityService) => {
+    const match = issuesQueue.filter ((q) => q.id === issue.id && q.service === issue.service)[0]
+    if (!match)
+      issuesQueue.push (issue)
+    else
+      match.multipleQueue = true
   },
 
-  addIssueToQueue: async (issue: EntityService) => {
-    const addIssue_cb = () => {
-      // add to start
-      issuesQueue.unshift (issue)
+  removeIssueFromQueue: (issue: EntityService) => {
+    const match = issuesQueue.filter ((q) => q.id === issue.id && q.service === issue.service)[0]
+    if (match) {
+      // remove multipleQueue which is added when changes happen on this issue its processing
+      if (match.multipleQueue)
+        match.multipleQueue = false
+      // else remove it completely
+      else
+        issuesQueue = issuesQueue.filter ((f) => f.id !== issue.id && f.service !== issue.service)
     }
-    await webhookHandler.removeIssueFromQueue (issue)
-    await webhookHandler.operationOnQueue (addIssue_cb)
-  },
-
-  removeIssueFromQueue: async (issue: EntityService) => {
-    const removeIssue_cb = () => {
-      issuesQueue = issuesQueue.filter ((queuedIssue) => (
-        webhookHandler.getUniqueEntityServiceId (queuedIssue) !==
-        webhookHandler.getUniqueEntityServiceId (issue)
-      ))
-    }
-    await webhookHandler.operationOnQueue (removeIssue_cb)
   },
 
   getIssuesQueue: () => [...issuesQueue],
-  getIsIssuesQueueLocked: () => isIssuesQueueLocked,
 
   initDoMirroring: async (opts: Object = {}) => {
     if (opts.testTimestamp !== undefined)
@@ -119,7 +109,7 @@ export const webhookHandler = {
         id: opts.issueId,
         service: opts.service,
       }
-      await webhookHandler.addIssueToQueue (issueService)
+      webhookHandler.addIssueToQueue (issueService)
     }
 
     startTime = startTime || new Date ().getTime ()
@@ -220,7 +210,7 @@ export const webhookHandler = {
         webhookHandler.addToMapping (issue, {waitingForMirror: true})
         newIssuesCreated = true
         // TODO: workaround in case webhook does not arrive
-        await webhookHandler.addIssueToQueue (issue)
+        webhookHandler.addIssueToQueue (issue)
       }
     }
 
@@ -278,7 +268,8 @@ export const webhookHandler = {
           }
           */
         }
-        await webhookHandler.removeIssueFromQueue (issue)
+
+        webhookHandler.removeIssueFromQueue (issue)
       }
     }
 
@@ -305,15 +296,17 @@ export const webhookHandler = {
       log ("Continue listening for changes".cyan)
     }
     else {
+      /*
       const _timeout = 10000
       await helpers.asyncTimeout (_timeout)
       log ("..timeout?", "Clearing queue and restarting".cyan)
 
       // TODO: there's a bug here when webhooks fail, this is a workaround
-      isIssuesQueueLocked = false
+
       issuesQueue = []
 
       return await webhookHandler.initDoMirroring ()
+      */
     }
   },
 
