@@ -234,23 +234,11 @@ export const webhookHandler = {
     }
     else {
       issues = issues.concat (counterparts)
-      const allComments: Array<IssueComment> = []
 
-      // get all comments
-      for (let i = 0; i < issues.length; ++i) {
-        const issue = issues[i]
+      const allComments: Array<IssueComment> = issues.reduce ((a, b) => a.concat (b.comments), [])
 
-        const issueComments = await webhookHandler.getComments (issue)
-        allComments.push (...issueComments)
-
-        // adding as property to call doSingleEntity for comments at once on all issues
-        issue.comments = issueComments
-      }
-
-      // sort comment origs first, do ids mapping
-      await Promise.all (webhookHandler.getEntitiesWithOriginalsFirst (allComments).map (async (comment) => {
-        webhookHandler.addToMapping (comment)
-      }))
+      // add each comment to mapping
+      webhookHandler.getEntitiesWithOriginalsFirst (allComments).forEach ((c) => webhookHandler.addToMapping (c))
 
       // await Promise.all (issues.map (async (issue) => {
 
@@ -316,8 +304,7 @@ export const webhookHandler = {
       log ("Continue listening for changes".cyan)
     }
     else {
-      console.log ("asdf")
-      // timeout?
+      console.log ("..timeout?")
     }
   },
 
@@ -528,99 +515,103 @@ export const webhookHandler = {
   //composeYoutrackId: (id: string): string => `${auth.youtrack.project}-${id}`,
   //extractYoutrackId: (fullId: string): string => fullId.split("-")[1],
 
+  githubPaginationRest: async (params: Object): Array<Object> => {
+    let linksObj
+    const rawList = await integrationRest (params)
+    .then ((response) => {linksObj = response.links; return response.body})
+    .catch ((err) => {throw err})
+
+    if (linksObj && linksObj.last) {
+      const lastUrl = linksObj.last
+      const urls = []
+      const afterUrlIndex = helpers.getIndexAfterLast (`${auth.github.url}/`, lastUrl)
+      const afterPageEqIndex = helpers.getIndexAfterLast ("page=", lastUrl)
+      const pagesCount/*: number */= Number.parseInt (lastUrl.substring (afterPageEqIndex))
+
+        // starting from 2, already have page1 issues,
+        // including pagesCount as page1 is first not page0,
+        // +1 to get extra page just to be sure (new issue pushes another to last+1 page)
+      for (let i = 2; i <= pagesCount + 1; ++i) {
+        const url = lastUrl.substring (afterUrlIndex, afterPageEqIndex) + i
+        urls.push (url)
+      }
+      const linksParams = {
+        service: "github",
+        method: "get",
+      }
+      await Promise.all (urls.map (async (url) => {
+        const perPageElements = await integrationRest ({...linksParams, url})
+          .then ((response) => response.body)
+          .catch ((err) => {throw err})
+
+        rawList.push (...perPageElements)
+      }))
+      return rawList
+    }
+    return rawList
+  },
+
   getProjectIssuesRaw: async (sourceService: string, query: Object | void) => {
-    const restParams = {
+    const commonParams = {
       service: sourceService,
       method: "get",
       query,
     }
 
+    let rawIssues: Array<Object> = []
+
     switch (sourceService) {
-      case "youtrack":
-        restParams.url = `issue/byproject/${auth.youtrack.project}`
-        break
-      case "github":
-        // restParams.sort = "created" // have to do it manually anyway (async per page)
-        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues`
-        break
-    }
+      case "youtrack": {
+        rawIssues = await integrationRest ({
+          ...commonParams,
+          url: `issue/byproject/${auth.youtrack.project}`,
+        })
+        .then ((response) => response.body)
+        .catch ((err) => {throw err})
 
-    let linksObj
-    let rawIssues = await integrationRest (restParams)
-    .then ((response) => {linksObj = response.links; return response.body})
-    .catch ((err) => {throw err})
-
-    // embrace forced pagination...
-    if (sourceService === "github") {
-      if (linksObj && linksObj.last) {
-        const lastUrl = linksObj.last
-        const urls = []
-        const afterUrlIndex = helpers.getIndexAfterLast (`${auth.github.url}/`, lastUrl)
-        const afterPageEqIndex = helpers.getIndexAfterLast ("page=", lastUrl)
-        const pagesCount/*: number */= Number.parseInt (lastUrl.substring (afterPageEqIndex))
-
-        // starting from 2, already have page1 issues,
-        // including pagesCount as page1 is first not page0,
-        // +1 to get extra page just to be sure (new issue pushes another to last+1 page)
-        for (let i = 2; i <= pagesCount + 1; ++i) {
-          const url = lastUrl.substring (afterUrlIndex, afterPageEqIndex) + i
-          urls.push (url)
-        }
-        const linksParams = {
-          service: "github",
-          method: "get",
-        }
-        await Promise.all (urls.map (async (url) => {
-          const perPageIssues = await integrationRest ({...linksParams, url})
-          .then ((response) => response.body)
-          .catch ((err) => {throw err})
-
-          rawIssues.push (...perPageIssues)
-        }))
+        return rawIssues.map ((rawIssue) => {
+          const issue = webhookHandler.getFormatedIssue (sourceService, rawIssue)
+          issue.comments = (rawIssue.comment || []).map ((rawComment) =>
+            webhookHandler.getFormatedComment (issue, rawComment))
+          return issue
+        })
       }
 
-      // exclude pull requests
-      rawIssues = rawIssues.filter ((ri) => !ri.pull_request)
+      case "github": {
+        // commonParams.sort = "created" // have to do it manually anyway (async per page)
+        rawIssues = await webhookHandler.githubPaginationRest ({
+          ...commonParams,
+          url: `repos/${auth.github.user}/${auth.github.project}/issues`,
+        })
 
-      // get all github comments
-      const params = {
-        service: "github",
-        method: "get",
-        url: `repos/${auth.github.user}/${auth.github.project}/issues/comments`,
+        // exclude pull requests
+        rawIssues = rawIssues.filter ((ri) => !ri.pull_request)
+
+        // get all github comments
+        const allGithubComments = await webhookHandler.githubPaginationRest ({
+          ...commonParams,
+          url: `repos/${auth.github.user}/${auth.github.project}/issues/comments`,
+        })
+
+        const issueIdCommentsMap = {}
+        allGithubComments.forEach ((rawComment) => {
+          const ind1 = helpers.getIndexAfterLast ("/issues/", rawComment.html_url)
+          const ind2 = rawComment.html_url.lastIndexOf ("#")
+          const issueId = rawComment.html_url.substring (ind1, ind2)
+
+          issueIdCommentsMap[issueId] = issueIdCommentsMap[issueId] || []
+          issueIdCommentsMap[issueId].push (rawComment)
+        })
+
+        return rawIssues.map ((rawIssue) => {
+          const issue = webhookHandler.getFormatedIssue (sourceService, rawIssue)
+          const issueId = rawIssue.number.toString ()
+          issue.comments = (issueIdCommentsMap[issueId] || []).map ((rawComment) =>
+            webhookHandler.getFormatedComment (issue, rawComment))
+          return issue
+        })
       }
-      const allGithubComments = await integrationRest (params)
-      .then ((response) => response.body)
-      .catch ((err) => {throw err})
-
-      const issueIdCommentsMap = {}
-      allGithubComments.forEach ((rawComment) => {
-        const match1 = "/issues/"
-        const ind1 = rawComment.html_url.lastIndexOf (match1) + match1.length
-        const ind2 = rawComment.html_url.lastIndexOf ("#")
-        const issueId = rawComment.html_url.substring (ind1, ind2)
-
-        console.log ({issueId, issueIdCommentsMap})
-        issueIdCommentsMap[issueId] = issueIdCommentsMap[issueId] || []
-        issueIdCommentsMap[issueId].push (rawComment)
-      })
-      console.log ("AAA", {issueIdCommentsMap})
-
-      return rawIssues.map ((rawIssue) => {
-        const issue = webhookHandler.getFormatedIssue (sourceService, rawIssue)
-        issue.comments = (issueIdCommentsMap[rawIssue.id] || []).map ((rawComment) =>
-          webhookHandler.getFormatedComment (issue, rawComment))
-        return issue
-      })
     }
-    // else youtrack
-
-    return rawIssues.map ((rawIssue) => {
-      const issue = webhookHandler.getFormatedIssue (sourceService, rawIssue)
-      issue.comments = (rawIssue.comments || []).map ((rawComment) =>
-        webhookHandler.getFormatedComment (issue, rawComment))
-      return issue
-    })
-
   },
 
   doStuff: async (req, res) => {
