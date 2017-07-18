@@ -49,8 +49,7 @@ const log = (...args) => {
   // skip lines containing with
   if (true // eslint-disable-line no-constant-condition
     // && args[0].indexOf ("Skip") === -1
-    // && args[0].indexOf ("Initial") === -1
-    // args[0].indexOf ("Processing") === -1
+    // && args[0].indexOf ("Processing") === -1
   )
     console.log(...args) // eslint-disable-line no-console
 }
@@ -220,6 +219,8 @@ export const webhookHandler = {
         // setting true to indicate that the mirror has been requested
         webhookHandler.addToMapping (issue, {waitingForMirror: true})
         newIssuesCreated = true
+        // TODO: workaround in case webhook does not arrive
+        await webhookHandler.addIssueToQueue (issue)
       }
     }
 
@@ -230,7 +231,7 @@ export const webhookHandler = {
 
     if (newIssuesCreated) {
       log ("Created issues during last run".grey, "awaiting webhook".cyan)
-      // todo keepTiming
+      keepTiming = true
     }
     else {
       issues = issues.concat (counterparts)
@@ -304,7 +305,15 @@ export const webhookHandler = {
       log ("Continue listening for changes".cyan)
     }
     else {
-      console.log ("..timeout?")
+      const _timeout = 10000
+      await helpers.asyncTimeout (_timeout)
+      log ("..timeout?", "Clearing queue and restarting".cyan)
+
+      // TODO: there's a bug here when webhooks fail, this is a workaround
+      isIssuesQueueLocked = false
+      issuesQueue = []
+
+      return await webhookHandler.initDoMirroring ()
     }
   },
 
