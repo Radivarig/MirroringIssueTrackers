@@ -28,10 +28,15 @@ Double check that you've entered correct project information.
 
 ## Usage
 
+(*All of the following is required in order for server to work properly*)
+
 - Create bot account on both services that will author the mirrored content (e.g. YourCompany-bot)
 
 - Enable experimantal JS Workflow Editor
   - Open Settings > Gobal Settings > Open Feature Configuration page and set "New Workflow Editor" to a user group "All Users" or other more restrictive group.
+
+- Increase "Max Issues To Export" to way more than you have issues in a project, like 10000.
+  - Open Settings > Gobal Settings > Max Issues To Export
 
 - Youtrack Workflow webhook:
   - Compress `webhooks` [folder](https://github.com/Radivarig/MirroringIssueTrackers/tree/master/server/workflows/webhooks) to `webhooks.zip`
