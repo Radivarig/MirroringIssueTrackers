@@ -238,7 +238,8 @@ export const webhookHandler = {
         (entityService) => webhookHandler.entityLog (entityService)).join (", "))*/
 
       log ("Expecting webhooks after creation".blue, "waiting".cyan)
-      return webhookHandler.restartIfNoActivity (10000)
+      // wait for some time to make github start sending webhooks again
+      return webhookHandler.restartIfNoActivity (30000)
     }
 
     // comments can be originals on both original issues and mirrors so include counterparts
