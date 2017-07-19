@@ -39,8 +39,8 @@ Double check that you've entered correct project information.
   - Open Settings > Gobal Settings > Max Issues To Export
 
 - Youtrack Workflow webhook:
-  - Compress `webhooks` [folder](https://github.com/Radivarig/MirroringIssueTrackers/tree/master/server/workflows/webhooks) to `webhooks.zip`
-  - Project > select your project > Edit Project > Workflow > Import Workflow and select webhooks.zip
+  - Compress `github_mirroring_webhooks` [folder](https://github.com/Radivarig/MirroringIssueTrackers/tree/master/server/workflows/github_mirroring_webhooks) to `github_mirroring_webhooks.zip`
+  - Project > select your project > Edit Project > Workflow > Import Workflow and select github_mirroring_webhooks.zip
   - Edit the file named config of the webhook to your server URL + `:7777/youtrack_webhook`
 
 - Github webbhook:
