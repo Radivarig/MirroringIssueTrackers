@@ -27,8 +27,8 @@ import settings from "../config/settings.config"
 
 import Store from './Store'
 const store = new Store ()
-
 import UsernameMapping, {UsernameInfo, KnownUsernameInfo} from './UsernameMapping'
+
 const usernameInfos: Array<UsernameInfo> = require('../config/usernames.config').default
 const usernameMapping = new UsernameMapping (usernameInfos)
 
@@ -39,7 +39,18 @@ let testTimestamp: number | void = undefined
 
 let issuesQueue: Array<EntityService> = []
 
-const recentlyCreatedIdsObj: Object = {}
+import jsonfile from 'jsonfile'
+import mkdirp from 'mkdirp'
+import path from 'path'
+
+// eslint-disable-next-line no-undef
+const createdIdsFileName = path.join(__dirname, "..", "nodemonIgnore", "createdIds.json")
+let createdIdsObject: Object = {}
+try {createdIdsObject = jsonfile.readFileSync(createdIdsFileName)}
+catch (e) {
+  mkdirp (path.dirname (createdIdsFileName))
+  jsonfile.writeFile (createdIdsFileName, {}, (err) => {if (err) throw err})
+}
 
 let startTime
 let keepTiming
@@ -182,7 +193,7 @@ export const webhookHandler = {
     // map all if still waiting
     if (queuedIssues.length === 0 || webhookHandler.getOriginalsWaitingForMirrors ().length > 0) {
       // todo: use fn that receives an array
-      issuesQueue = allIssues
+      issuesQueue = allIssues.map ((f) => ({id: f.id, service: f.service, issueId: f.issueId}))
 
       queuedIssues = allIssues
       issues = allIssues
@@ -1466,12 +1477,15 @@ export const webhookHandler = {
     const id: string = webhookHandler.getUniqueEntityServiceId (entity)
 
     // throw if recently requested creation of same id
-    if (recentlyCreatedIdsObj[id]) {
+    if (createdIdsObject[id]) {
       log ("Recursion for creating".red, webhookHandler.entityLog (entity).yellow)
       throw "Possible recursion".red
     }
     // set creation flag
-    recentlyCreatedIdsObj[id] = true
+    createdIdsObject[id] = true
+
+    // serialize to file to preserve between server restarts from cli
+    jsonfile.writeFile (createdIdsFileName, createdIdsObject, (err) => {if (err) throw err})
   },
 
   createMirror: async (entity: Entity) => {
