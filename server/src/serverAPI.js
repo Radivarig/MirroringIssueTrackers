@@ -167,28 +167,33 @@ export const webhookHandler = {
 
     const allIssues = await webhookHandler.getAllIssues ()
 
-    const queuedIssues: Array<Issue> = webhookHandler.getQueuedIssues (allIssues)
+    let queuedIssues: Array<Issue> = webhookHandler.getQueuedIssues (allIssues)
     const counterpartIssues: Array<Issue> = webhookHandler.getCounterparts (queuedIssues, allIssues)
 
     // remove mappings to detect deleted
     queuedIssues.concat (counterpartIssues).forEach ((issue) => {
       webhookHandler.removeMappingContaining ({issueId: issue.id})
     })
-
-    // mapp queued and counterparts
+    // map queued and counterparts
     webhookHandler.doMappingOnArray (queuedIssues.concat (counterpartIssues))
+
+    let issues: Array<Issue> = queuedIssues
 
     // map all if still waiting
     if (queuedIssues.length === 0 || webhookHandler.getOriginalsWaitingForMirrors ().length > 0) {
+      // todo: use fn that receives an array
+      issuesQueue = allIssues
+
+      queuedIssues = allIssues
+      issues = allIssues
+
       // remove mappings to detect deleted
       allIssues.forEach ((issue) => {
         webhookHandler.removeMappingContaining ({issueId: issue.id})
       })
-
+      // map queued and counterparts
       webhookHandler.doMappingOnArray (allIssues)
     }
-
-    let issues: Array<Issue> = queuedIssues.length !== 0 ? queuedIssues : allIssues
 
     let newIssuesCreated = false
 
