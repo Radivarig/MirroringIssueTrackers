@@ -43,6 +43,9 @@ import jsonfile from 'jsonfile'
 import mkdirp from 'mkdirp'
 import path from 'path'
 
+let addedInitCreatedIssueIds: boolean = false
+let addedInitCreatedCommentIds: boolean = false
+
 // eslint-disable-next-line no-undef
 const createdIdsFileName = path.join(__dirname, "..", "nodemonIgnore", "createdIds.json")
 let createdIdsObject: Object = {}
@@ -87,6 +90,14 @@ export const webhookHandler = {
       log ("Changed issue:".yellow, service, issueId)
       await webhookHandler.initDoMirroring ({service, issueId})
     }
+  },
+
+  addEntitiesToCreatedIds: (entities: Array <EntityService>) => {
+    for (const entity of entities) {
+      const uniqueId: string = webhookHandler.getUniqueEntityServiceId (entity)
+      createdIdsObject[uniqueId] = true
+    }
+    jsonfile.writeFile (createdIdsFileName, createdIdsObject, (err) => {if (err) throw err})
   },
 
   addIssueToQueue: (issue: EntityService) => {
@@ -178,6 +189,12 @@ export const webhookHandler = {
 
     const allIssues = await webhookHandler.getAllIssues ()
 
+    // add all existing issues to createdIdsObject
+    if (!addedInitCreatedIssueIds) {
+      webhookHandler.addEntitiesToCreatedIds (allIssues)
+      addedInitCreatedIssueIds = true
+    }
+
     let queuedIssues: Array<Issue> = webhookHandler.getQueuedIssues (allIssues)
     const counterpartIssues: Array<Issue> = webhookHandler.getCounterparts (queuedIssues, allIssues)
 
@@ -262,6 +279,12 @@ export const webhookHandler = {
     issues = issues.concat (counterpartIssues)
 
     const allComments: Array<IssueComment> = issues.reduce ((a, b) => a.concat (b.comments), [])
+
+    // add all existing issues to createdIdsObject
+    if (!addedInitCreatedCommentIds) {
+      webhookHandler.addEntitiesToCreatedIds (allComments)
+      addedInitCreatedCommentIds = true
+    }
 
     // add each comment to mapping
     webhookHandler.getEntitiesWithOriginalsFirst (allComments).forEach ((c) => webhookHandler.addToMapping (c))
