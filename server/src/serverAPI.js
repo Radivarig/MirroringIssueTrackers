@@ -39,21 +39,10 @@ let testTimestamp: number | void = undefined
 
 let issuesQueue: Array<EntityService> = []
 
-import jsonfile from 'jsonfile'
-import mkdirp from 'mkdirp'
-import path from 'path'
-
 let addedInitCreatedIssueIds: boolean = false
 let addedInitCreatedCommentIds: boolean = false
 
-// eslint-disable-next-line no-undef
-const createdIdsFileName = path.join(__dirname, "..", "nodemonIgnore", "createdIds.json")
 let createdIdsObject: Object = {}
-try {createdIdsObject = jsonfile.readFileSync(createdIdsFileName)}
-catch (e) {
-  mkdirp (path.dirname (createdIdsFileName))
-  jsonfile.writeFile (createdIdsFileName, {}, (err) => {if (err) throw err})
-}
 
 let startTime
 let keepTiming
@@ -97,7 +86,6 @@ export const webhookHandler = {
       const uniqueId: string = webhookHandler.getUniqueEntityServiceId (entity)
       createdIdsObject[uniqueId] = true
     }
-    jsonfile.writeFile (createdIdsFileName, createdIdsObject, (err) => {if (err) throw err})
   },
 
   addIssueToQueue: (issue: EntityService) => {
@@ -1506,9 +1494,6 @@ export const webhookHandler = {
     }
     // set creation flag
     createdIdsObject[id] = true
-
-    // serialize to file to preserve between server restarts from cli
-    jsonfile.writeFile (createdIdsFileName, createdIdsObject, (err) => {if (err) throw err})
   },
 
   createMirror: async (entity: Entity) => {
