@@ -8,7 +8,8 @@ import {webhookHandler} from '../src/serverAPI'
 import auth from '../config/auth.config'
 import {services} from '../config/const.config'
 import {
-  Entity,
+  EntityService,
+  Issue,
 } from '../src/types'
 
 describe('projectExist', () => {
@@ -34,25 +35,30 @@ describe('throwIfAnyProjectNotExist', () => {
     await webhookHandler.throwIfAnyProjectNotExist ()
   })
 })
-// store created
-const testEntities = {}
-services.map (
-  service => {
-    testEntities[service] = {
-      issues: [],
-      comments: [],
-    }
-  }
-)
 
 describe('createMirror', async () => {
   it ('creates a mirror issue/comment and returns its new info', async () => {
     await Promise.all (services.map (async (service) => {
       const issue1 = webhookHandler.generateRandomIssue (service)
-      const newIssue1: EntityService = await webhookHandler.createIssue (issue1, service)
+      const newIssueService1: EntityService = await webhookHandler.createIssue (issue1, service)
+
 
       const comment1 = await webhookHandler.generateRandomComment (service)
-      const newComment1: EntityService = await webhookHandler.createComment (comment1, newIssue1)
+      const newCommentService1: EntityService = await webhookHandler.createComment (comment1, newIssueService1)
+
+      // todo compare them
+    }))
+  })
+})
+
+describe('getTimestampOfLastIssue', async () => {
+  it ('returns timestamp of last created issue', async () => {
+    await Promise.all (services.map (async (service) => {
+      const issue1 = webhookHandler.generateRandomIssue (service)
+      const newIssueService1: EntityService = await webhookHandler.createIssue (issue1, service)
+      const newIssue1: Issue = await webhookHandler.getIssue (newIssueService1)
+      const lastTs = await webhookHandler.getTimestampOfLastIssue (service)
+      expect (newIssue1.createdAt).to.equal (lastTs)
     }))
   })
 })
@@ -106,9 +112,6 @@ describe('initDoMirroring', async () => {
       commentA.issueId = parentIssueId
       commentB.issueId = parentIssueId
 
-      // store test comments
-      testEntities[service].comments.push (commentA)
-      testEntities[service].comments.push (commentB)
     }))
   })
 

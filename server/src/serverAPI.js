@@ -163,8 +163,6 @@ export const webhookHandler = {
   // call doSingleEntity for each issue,
   // for each issue, call doSingleEntity for all comments.
   doMirroring: async () => {
-    // console.log ("calling initDoMirroring", {mirroringInProgress, issuesQueue})
-
     if (mirroringInProgress) {
       redoMirroring = true
       return
@@ -513,7 +511,48 @@ export const webhookHandler = {
       m.services.filter ((s) => s.service === entityService.service && s.id === entityService.id)[0])[0]
   },
 
-  getProjectIssues: async (sourceService: string, sinceTimestamp: number | void) => {
+  getTimestampOfLastIssue: async (targetService: string): number => {
+    switch (targetService) {
+      case "youtrack": {
+        const rawIssue = await integrationRest ({
+          service: targetService,
+          method: "get",
+          url: `issue/byproject/${auth.youtrack.project}`,
+          query: {
+            max: 100000,
+          },
+        })
+        .then ((response) => response.body[response.body.length - 1])
+
+        let createTs = 0
+        rawIssue && rawIssue.field.forEach ((f) => {
+          if (f.name === "created")
+            createTs = webhookHandler.convertTimestamp (f.value, targetService)
+        })
+        return createTs
+      }
+
+      case "github": {
+        const rawIssue = await integrationRest ({
+          service: "github",
+          method: "get",
+          url: `repos/${auth.github.user}/${auth.github.project}/issues`,
+          query: {
+            state: "all",
+            per_page: 1,
+          },
+        })
+        .then ((response) => response.body[0])
+
+        let createTs = 0
+        if (rawIssue)
+          createTs = webhookHandler.convertTimestamp (rawIssue.created_at, targetService)
+        return createTs
+      }
+    }
+  },
+
+  getProjectIssues: async (sourceService: string, sinceTimestamp: number | void): Array<Issue> => {
     const query = {}
 
     switch (sourceService) {
@@ -586,7 +625,7 @@ export const webhookHandler = {
     return rawList
   },
 
-  getProjectIssuesRaw: async (sourceService: string, query: Object | void) => {
+  getProjectIssuesRaw: async (sourceService: string, query: Object | void): Array<Issue> => {
     const commonParams = {
       service: sourceService,
       method: "get",
@@ -1152,18 +1191,20 @@ export const webhookHandler = {
     return formatedComment
   },
 
-  getIssue: async (sourceService: string, issueId: string): Issue | void => {
-    const restParams = {service: sourceService}
+  getIssue: async (issueService: EntityService): Issue | void => {
+    const restParams = {
+      service: issueService.service,
+    }
 
-    switch (sourceService) {
+    switch (issueService.service) {
       case "youtrack": {
         restParams.method = "get"
-        restParams.url = `issue/${issueId}`
+        restParams.url = `issue/${issueService.id}`
         break
       }
       case "github": {
         restParams.method = "get"
-        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${issueId}`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${issueService.id}`
         break
       }
     }
@@ -1179,7 +1220,7 @@ export const webhookHandler = {
     if (!rawIssue)
       return
 
-    return webhookHandler.getFormatedIssue (sourceService, rawIssue)
+    return webhookHandler.getFormatedIssue (issueService.service, rawIssue)
   },
 
   getLabelsFromTags: (tags/*: Array<{name: string, value: string}>*/): Array<string> =>
@@ -1193,6 +1234,17 @@ export const webhookHandler = {
     fields.map ((field) =>
       // add here handles for field.specialAttr
        `${field.name}:${field.value}`),
+
+  convertTimestamp: (value: string, targetService: string): number => {
+    switch (targetService) {
+      case "github": {
+        return new Date (value).getTime()
+      }
+      case "youtrack": {
+        return parseInt (value)
+      }
+    }
+  },
 
   getFormatedIssue: (service: string, rawIssue: Object): Issue => {
     const issueId: string = webhookHandler.getIdFromRawIssue (service, rawIssue)
@@ -1215,6 +1267,7 @@ export const webhookHandler = {
           body: normalizeNewline (rawIssue.body),
           labels: uniqueLabels,
           state: webhookHandler.getStateFromRawIssue (service, rawIssue),
+          createdAt: webhookHandler.convertTimestamp (rawIssue.created_at, service),
         }
       }
       case "youtrack": {
@@ -1224,6 +1277,7 @@ export const webhookHandler = {
         const parentFor = []
         const subtaskOf = []
         let author = ""
+        let createdAt = 0
 
         rawIssue.field.forEach ((f) => {
           if (f.name === "summary")
@@ -1239,8 +1293,9 @@ export const webhookHandler = {
               else if (l.type === "Subtask" && l.role === "parent for")
                 parentFor.push (l.value)
             })
-
           }
+          else if (f.name === "created")
+            createdAt = webhookHandler.convertTimestamp (f.value, service)
           else if (settings.fieldsToIncludeAsLabels.indexOf (f.name) !== -1)
             fields.push (f)
         })
@@ -1259,7 +1314,7 @@ export const webhookHandler = {
           parentFor,
           subtaskOf,
           state,
-          rawComments: rawIssue.comment.filter ((c) => !c.deleted),
+          createdAt,
           tags: rawIssue.tag.map ((t) => t.value),
         }
       }
@@ -1461,11 +1516,9 @@ export const webhookHandler = {
 
           const freshIssueComments: Array<IssueComment> = await webhookHandler.getComments (parentIssueService)
 
-          console.log({freshIssueComments})
-
-          for (const comment of freshIssueComments) {
-            if (comment.issueId === parentIssueService.id)
-              return comment.id
+          for (const c of freshIssueComments) {
+            if (c.issueId === parentIssueService.id)
+              return c.id
           }
         }
       }
