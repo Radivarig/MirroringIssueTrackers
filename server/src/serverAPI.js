@@ -1424,7 +1424,7 @@ export const webhookHandler = {
 
   },
 
-  createMirrorComment: async (comment: IssueComment) => {
+  createMirrorComment: async (comment: IssueComment): EntityService => {
     await Promise.all (services.map (async (targetService) => {
       if (targetService === comment.service)
         return
@@ -1446,30 +1446,58 @@ export const webhookHandler = {
     }))
   },
 
-  createComment: async (comment: IssueComment, targetIssueService: EntityService): string => {
+  createComment: async (comment: IssueComment, parentIssueService: EntityService): EntityService => {
     const restParams = {
-      service: targetIssueService,
+      service: parentIssueService.service,
       method: "post",
     }
 
-    switch (targetIssueService) {
+    switch (parentIssueService.service) {
       case "youtrack":
-        restParams.url = `issue/${targetIssueService.id}/execute`
+        restParams.url = `issue/${parentIssueService.id}/execute`
         restParams.query = {
           comment: comment.body,
         }
         break
       case "github":
-        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${parentIssueService.id}/comments`
         restParams.data = {
           body: comment.body,
         }
         break
     }
 
-    await integrationRest (restParams)
-    .then ((response) => response.body)
+    // create comment and get its id
+    const newCommentId: string = await integrationRest (restParams)
+    .then (async (response) => {
+      switch (parentIssueService.service) {
+        case "github": {
+          return response.body.id.toString ()
+        }
+        case "youtrack": {
+          // youtrack comments can be created only with "execute comment"
+          // execute response gives no info
+          // so we fetch all comments of parent issue and match it by comments issueId
+
+          const freshIssueComments: Array<IssueComment> = await webhookHandler.getComments (parentIssueService)
+
+          console.log({freshIssueComments})
+
+          for (const comment of freshIssueComments) {
+            if (comment.issueId === parentIssueService.id)
+              return comment.id
+          }
+        }
+      }
+    })
     .catch ((err) => {throw err})
+
+    return {
+      service: parentIssueService.service,
+      id: newCommentId,
+      issueId: parentIssueService.id,
+    }
+
   },
 
   getUniqueEntityServiceId: (entityService: EntityService): string =>
@@ -1484,7 +1512,7 @@ export const webhookHandler = {
     }
   },
 
-  createMirror: async (entity: Entity) => {
+  createMirror: async (entity: Entity): EntityService => {
     if (createdEntityIds.contains (entity)) {
       log ("Recursion for creating".red, webhookHandler.entityLog (entity).yellow)
       throw "Possible recursion".red
@@ -1498,25 +1526,19 @@ export const webhookHandler = {
     return await webhookHandler.createMirrorIssue (entity)
   },
 
-  createMirrorIssue: async (sourceIssue: Issue) => {
-    // eslint-disable-next-line no-undef
-    /*if (process.env.ENV !== "test" && sourceIssue.service === "github") {
-      log ("temporary disabled gh->yt")
-      return
-    }*/
-
+  createMirrorIssue: async (sourceIssue: Issue): EntityService => {
     await Promise.all (services.map (async (targetService) => {
       if (targetService === sourceIssue.service)
         return
 
       const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
-      await webhookHandler.createIssue (preparedIssue, targetService)
+      return await webhookHandler.createIssue (preparedIssue, targetService)
     }))
 
   },
 
-  createIssue: async (issue: Issue, targetService: string): string => {
+  createIssue: async (issue: Issue, targetService: string): EntityService => {
     const restParams = {service: targetService}
 
     switch (targetService) {
@@ -1559,15 +1581,16 @@ export const webhookHandler = {
     })
     .catch ((err) => {throw err})
 
+    const newEntityService = {
+      service: targetService,
+      id: newIssueId,
+    }
     // update fields/labels
     await webhookHandler.updateMirrorIssue (issue, {
-      targetEntityService: {
-        service: targetService,
-        id: newIssueId,
-      },
+      targetEntityService: newEntityService,
     })
 
-    return newIssueId
+    return newEntityService
   },
 
   projectExist: async (projName: string, targetService: string): boolean => {
