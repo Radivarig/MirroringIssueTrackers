@@ -108,7 +108,11 @@ export const webhookHandler = {
     }
   },
 
-  getIssuesQueue: () => [...issuesQueue],
+  getIssuesQueue: () => issuesQueue,
+  setIssuesQueue: (newIssuesQueue: Array<entityService>) => issuesQueue = newIssuesQueue,
+
+  getCreatedIdsObject: () => createdIdsObject,
+  setCreatedIdsObject: (newCreatedIdsObject) => createdIdsObject = newCreatedIdsObject,
 
   restartIfNoActivity: (ms: number) => {
     // end and restart if no activity in next n sec
