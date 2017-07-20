@@ -10,10 +10,3 @@ export const getIndexAfterLast = (str: string, inStr: string): number => inStr.l
 
 export const asyncTimeout = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-export default {
-  throwIfValueNotAllowed,
-  formatTimestampAsDuration,
-  getIndexAfterLast,
-  asyncTimeout,
-}
-

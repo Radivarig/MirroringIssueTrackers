@@ -12,7 +12,12 @@ import "colors"
 import normalizeNewline from 'normalize-newline'
 
 import integrationRest from "./integrationRest"
-import helpers from "./helpers"
+
+import {
+  asyncTimeout,
+  throwIfValueNotAllowed,
+  getIndexAfterLast,formatTimestampAsDuration,
+} from './helpers'
 
 // import auth from "../config/auth.config"
 const auth: AuthConfig = require ("../config/auth.config").default
@@ -62,12 +67,12 @@ export const webhookHandler = {
       // respond so that youtrack doesn't hang... (opened an issue about it)
       res.send ()
       // give youtrack time to receive res.send()...
-      await helpers.asyncTimeout (1000)
+      await asyncTimeout (1000)
     }
 
     const rb = req.body
 
-    helpers.throwIfValueNotAllowed (service, services)
+    throwIfValueNotAllowed (service, services)
     log ("Webhook from".yellow, service, "action:".yellow, (rb.action || "").blue)
 
     if (["labeled", "unlabeled", "deleted", "created", "opened", "reopened", "closed", "edited", "comments_changed"].indexOf (rb.action) !== -1) {
@@ -177,7 +182,7 @@ export const webhookHandler = {
     mirroringInProgress = true
 
     // wait at start to catch consecutive webhooks
-    await helpers.asyncTimeout (2000)
+    await asyncTimeout (2000)
 
     const allIssues = await webhookHandler.getAllIssues ()
 
@@ -312,7 +317,7 @@ export const webhookHandler = {
     }
 
     // wait before end to catch late webhooks
-    await helpers.asyncTimeout (2000)
+    await asyncTimeout (2000)
 
     mirroringInProgress = false
 
@@ -335,7 +340,7 @@ export const webhookHandler = {
       console.log ("..timeout?")
       /*
       const _timeout = 30000
-      await helpers.asyncTimeout (_timeout)
+      await asyncTimeout (_timeout)
       log ("..timeout?", "Clearing queue and restarting".cyan)
 
       // TODO: there's a bug here when webhooks fail, this is a workaround
@@ -563,8 +568,8 @@ export const webhookHandler = {
     if (linksObj && linksObj.last) {
       const lastUrl = linksObj.last
       const urls = []
-      const afterUrlIndex = helpers.getIndexAfterLast (`${auth.github.url}/`, lastUrl)
-      const afterPageEqIndex = helpers.getIndexAfterLast ("page=", lastUrl)
+      const afterUrlIndex = getIndexAfterLast (`${auth.github.url}/`, lastUrl)
+      const afterPageEqIndex = getIndexAfterLast ("page=", lastUrl)
       const pagesCount/*: number */= Number.parseInt (lastUrl.substring (afterPageEqIndex))
 
         // starting from 2, already have page1 issues,
@@ -634,7 +639,7 @@ export const webhookHandler = {
 
         const issueIdCommentsMap = {}
         allGithubComments.forEach ((rawComment) => {
-          const ind1 = helpers.getIndexAfterLast ("/issues/", rawComment.html_url)
+          const ind1 = getIndexAfterLast ("/issues/", rawComment.html_url)
           const ind2 = rawComment.html_url.lastIndexOf ("#")
           const issueId = rawComment.html_url.substring (ind1, ind2)
 
@@ -749,7 +754,7 @@ export const webhookHandler = {
 
   getFormatedTimeFromStart: (): string => {
     const dt = (new Date().getTime () - startTime) / 1000
-    return helpers.formatTimestampAsDuration (dt)
+    return formatTimestampAsDuration (dt)
   },
 
   getEntityContainsSensitiveInfo: (entity: Entity): boolean => {
