@@ -1281,26 +1281,6 @@ export const webhookHandler = {
   wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
 
   getMeta: (entity: Entity): Object | void => {
-    const metaRaw = webhookHandler.getMetaRaw (entity)
-
-    if (!metaRaw)
-      return
-
-    return metaRaw
-    /*
-    // reattach youtrack project prefix
-    if (metaRaw.id && metaRaw.service === "youtrack") {
-      // only for issue.id and comment.issueId
-      if (metaRaw.issueId) // is a comment
-        metaRaw.issueId = webhookHandler.composeYoutrackId (metaRaw.issueId)
-      // only comments have issueId, this is issue then
-      else metaRaw.id = webhookHandler.composeYoutrackId (metaRaw.id)
-    }
-    return metaRaw
-    */
-  },
-
-  getMetaRaw: (entity: Entity): Object | void => {
     const varStart = `<!--${mirrorMetaVarName}=`
     const varEnd = "-->"
     const regexStr = `${varStart}(.*)${varEnd}`
