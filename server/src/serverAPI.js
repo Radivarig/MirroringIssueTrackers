@@ -44,10 +44,11 @@ let testTimestamp: number | void = undefined
 
 let issuesQueue: Array<EntityService> = []
 
+import CreatedEntityIds from "./CreatedEntityIds"
+const createdEntityIds = new CreatedEntityIds ()
+
 let addedInitCreatedIssueIds: boolean = false
 let addedInitCreatedCommentIds: boolean = false
-
-let createdIdsObject: Object = {}
 
 let startTime
 let keepTiming
@@ -86,13 +87,6 @@ export const webhookHandler = {
     }
   },
 
-  addEntitiesToCreatedIds: (entities: Array <EntityService>) => {
-    for (const entity of entities) {
-      const uniqueId: string = webhookHandler.getUniqueEntityServiceId (entity)
-      createdIdsObject[uniqueId] = true
-    }
-  },
-
   addIssueToQueue: (issue: EntityService) => {
     const match = issuesQueue.filter ((q) => q.id === issue.id && q.service === issue.service)[0]
     if (!match)
@@ -114,10 +108,7 @@ export const webhookHandler = {
   },
 
   getIssuesQueue: () => issuesQueue,
-  setIssuesQueue: (newIssuesQueue: Array<entityService>) => issuesQueue = newIssuesQueue,
-
-  getCreatedIdsObject: () => createdIdsObject,
-  setCreatedIdsObject: (newCreatedIdsObject) => createdIdsObject = newCreatedIdsObject,
+  setIssuesQueue: (newIssuesQueue: Array<EntityService>) => {issuesQueue = newIssuesQueue},
 
   restartIfNoActivity: (ms: number) => {
     // end and restart if no activity in next n sec
@@ -186,9 +177,9 @@ export const webhookHandler = {
 
     const allIssues = await webhookHandler.getAllIssues ()
 
-    // add all existing issues to createdIdsObject
+    // add all existing issues to createdEntityIds
     if (!addedInitCreatedIssueIds) {
-      webhookHandler.addEntitiesToCreatedIds (allIssues)
+      createdEntityIds.add (allIssues)
       addedInitCreatedIssueIds = true
     }
 
@@ -277,9 +268,9 @@ export const webhookHandler = {
 
     const allComments: Array<IssueComment> = issues.reduce ((a, b) => a.concat (b.comments), [])
 
-    // add all existing issues to createdIdsObject
+    // add all existing issues to createdEntityIds
     if (!addedInitCreatedCommentIds) {
-      webhookHandler.addEntitiesToCreatedIds (allComments)
+      createdEntityIds.add (allComments)
       addedInitCreatedCommentIds = true
     }
 
@@ -1493,20 +1484,15 @@ export const webhookHandler = {
     }
   },
 
-  throwOnCreationRecursion: (entity: Entity) => {
-    const id: string = webhookHandler.getUniqueEntityServiceId (entity)
-
-    // throw if recently requested creation of same id
-    if (createdIdsObject[id]) {
+  createMirror: async (entity: Entity) => {
+    if (createdEntityIds.contains (entity)) {
       log ("Recursion for creating".red, webhookHandler.entityLog (entity).yellow)
       throw "Possible recursion".red
     }
-    // set creation flag
-    createdIdsObject[id] = true
-  },
+    else {
+      createdEntityIds.add (entity)
+    }
 
-  createMirror: async (entity: Entity) => {
-    webhookHandler.throwOnCreationRecursion (entity)
     if (webhookHandler.getIsComment (entity))
       return await webhookHandler.createMirrorComment (entity)
     return await webhookHandler.createMirrorIssue (entity)
