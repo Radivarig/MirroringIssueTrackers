@@ -1429,11 +1429,11 @@ export const webhookHandler = {
       if (targetService === comment.service)
         return
 
-      const knownIssueService: EntityService = {
+      const knownEntityService: EntityService = {
         service: comment.service,
         id: comment.issueId,
       }
-      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
+      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownEntityService, targetService)
 
       if (!targetIssueService) {
         log ("No comment issue found", {comment, targetService})
@@ -1442,25 +1442,25 @@ export const webhookHandler = {
 
       const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
 
-      await webhookHandler.createComment (preparedComment, targetService, targetIssueService.id)
+      await webhookHandler.createComment (preparedComment, targetIssueService)
     }))
   },
 
-  createComment: async (comment: IssueComment, targetService: string, targetIssueId: string) => {
+  createComment: async (comment: IssueComment, targetIssueService: EntityService): string => {
     const restParams = {
-      service: targetService,
+      service: targetIssueService,
       method: "post",
     }
 
-    switch (targetService) {
+    switch (targetIssueService) {
       case "youtrack":
-        restParams.url = `issue/${targetIssueId}/execute`
+        restParams.url = `issue/${targetIssueService.id}/execute`
         restParams.query = {
           comment: comment.body,
         }
         break
       case "github":
-        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueId}/comments`
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetIssueService.id}/comments`
         restParams.data = {
           body: comment.body,
         }
