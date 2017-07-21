@@ -37,7 +37,7 @@ import UsernameMapping, {UsernameInfo, KnownUsernameInfo} from './UsernameMappin
 const usernameInfos: Array<UsernameInfo> = require('../config/usernames.config').default
 const usernameMapping = new UsernameMapping (usernameInfos)
 
-let restartTimeout
+let doRestart: boolean = false
 let redoMirroring: boolean = false
 let mirroringInProgress: boolean = false
 let testTimestamp: number | void = undefined
@@ -110,12 +110,13 @@ export const webhookHandler = {
   getIssuesQueue: () => issuesQueue,
   setIssuesQueue: (newIssuesQueue: Array<EntityService>) => {issuesQueue = newIssuesQueue},
 
-  restartIfNoActivity: (ms: number) => {
+  restartIfNoActivity: async (ms: number) => {
     // end and restart if no activity in next n sec
     mirroringInProgress = false
-    restartTimeout = setTimeout (
-      async () => await webhookHandler.initDoMirroring ()
-      , ms)
+    doRestart = true
+    await asyncTimeout (ms)
+    if (doRestart)
+      await webhookHandler.initDoMirroring ()
   },
 
   initDoMirroring: async (opts: Object = {}) => {
@@ -130,9 +131,10 @@ export const webhookHandler = {
       webhookHandler.addIssueToQueue (issueService)
     }
 
+    doRestart = false
     startTime = startTime || new Date ().getTime ()
     keepTiming = false
-    clearTimeout (restartTimeout)
+
     await webhookHandler.doMirroring ()
   },
 
@@ -258,7 +260,7 @@ export const webhookHandler = {
 
       log ("Expecting webhooks after creation".blue, "waiting".cyan)
       // wait for some time to make github start sending webhooks again
-      return webhookHandler.restartIfNoActivity (30000)
+      return await webhookHandler.restartIfNoActivity (30000)
     }
 
     // comments can be originals on both original issues and mirrors so include counterparts
