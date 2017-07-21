@@ -40,7 +40,8 @@ const usernameMapping = new UsernameMapping (usernameInfos)
 let doRestart: boolean = false
 let redoMirroring: boolean = false
 let mirroringInProgress: boolean = false
-let testTimestamp: number | void = undefined
+let testTimestamps: {github: number | void, youtuirack: number | void} =
+  {github: undefined, youtrack: undefined}
 
 let issuesQueue: Array<EntityService> = []
 
@@ -120,8 +121,8 @@ export const webhookHandler = {
   },
 
   initDoMirroring: async (opts: Object = {}) => {
-    if (opts.testTimestamp !== undefined)
-      testTimestamp = opts.testTimestamp
+    if (opts.testTimestamps !== undefined)
+      testTimestamps = opts.testTimestamps
 
     if (opts.issueId) {
       const issueService: EntityService = {
@@ -346,7 +347,7 @@ export const webhookHandler = {
   getAllIssues: async () => {
     const allIssues: Array<Issue> = []
     await Promise.all (services.map (async (service) => {
-      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service, testTimestamp)
+      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service, testTimestamps[service])
 
       log ("Issues count", service, projectIssues.length)
 

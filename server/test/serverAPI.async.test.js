@@ -36,17 +36,22 @@ describe('throwIfAnyProjectNotExist', () => {
   })
 })
 
-describe('createMirror', async () => {
-  it ('creates a mirror issue/comment and returns its new info', async () => {
+describe('createIssue, createComment', async () => {
+  it ('creates an issue/comment and returns its new info', async () => {
     await Promise.all (services.map (async (service) => {
       const issue1 = webhookHandler.generateRandomIssue (service)
       const newIssueService1: EntityService = await webhookHandler.createIssue (issue1, service)
+      const newIssue1: Issue = await webhookHandler.getIssue (newIssueService1)
 
+      expect (issue1.body).to.equal (newIssue1.body)
+      expect (issue1.title).to.equal (newIssue1.title)
 
       const comment1 = await webhookHandler.generateRandomComment (service)
       const newCommentService1: EntityService = await webhookHandler.createComment (comment1, newIssueService1)
+      const newComment1 = await webhookHandler.getComment (newCommentService1)
 
-      // todo compare them
+      expect (comment1.body).to.equal (newComment1.body)
+      expect (comment1.title).to.equal (newComment1.title)
     }))
   })
 })
@@ -64,17 +69,25 @@ describe('getTimestampOfLastIssue', async () => {
 })
 
 describe('initDoMirroring', async () => {
-  // get issues since now
-  const testTimestamp = new Date ().getTime ()
+  const issuesStore = {github: [], youtrack: []}
 
-  it ('mirrors issues', async () => {
+  it ('creates mirrors of issues', async () => {
+    const testTimestamps = {}
     await Promise.all (services.map (async (service) => {
-      const issues = await webhookHandler.getProjectIssues (service, testTimestamp)
-      expect (issues.length).to.equal (2)
+      testTimestamps[service] = await webhookHandler.getTimestampOfLastIssue (service)
+
+      const issue1 = webhookHandler.generateRandomIssue (service)
+      const newIssueService1: EntityService = await webhookHandler.createIssue (issue1, service)
+      const newIssue1: Issue = await webhookHandler.getIssue (newIssueService1)
+      issuesStore[service].push (newIssue1)
+
+      const issues: Array<Issue> = await webhookHandler.getProjectIssues (service, testTimestamps[service])
+      expect (issues.length).to.equal (1)
     }))
 
+    return
     // do mirroring
-    await webhookHandler.initDoMirroring ({testTimestamp})
+    await webhookHandler.initDoMirroring ({testTimestamps})
 
     await Promise.all (services.map (async (service) => {
       const issues = await webhookHandler.getProjectIssues (service, testTimestamp)
