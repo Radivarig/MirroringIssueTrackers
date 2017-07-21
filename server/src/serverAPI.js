@@ -580,8 +580,10 @@ export const webhookHandler = {
         query.state = "all"
         query.per_page = 100
 
-        if (sinceTimestamp !== undefined)
-          query.since = new Date(sinceTimestamp).toISOString()
+        if (sinceTimestamp !== undefined) {
+          // NOTE +1000 as github ignores milliseconds
+          query.since = new Date(sinceTimestamp + 1000).toISOString()
+        }
 
         return await webhookHandler.getProjectIssuesRaw (sourceService, query)
       }
