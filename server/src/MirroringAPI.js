@@ -1,4 +1,6 @@
 import {
+  Issue,
+  IssueComment,
   Entity,
   IssueCommentInfo,
   IssueInfo,
@@ -28,24 +30,20 @@ api.isOriginal = (entity: Entity): boolean => {
   return meta === undefined
 }
 
-api.getCommentParentInfo = (comment: IssueCommentInfo): IssueInfo => {
-  return {
-    id: comment.issueId,
-    service: comment.service,
-  }
-}
+api.getCommentParentInfo = (comment: IssueCommentInfo): IssueInfo => ({
+  id: comment.issueId,
+  service: comment.service,
+})
 
-api.generateMirrorSignature = (originalEntity: Entity, targetService): string => {
-  return api.getMetaAsEntityHtmlComment ({
-    id: originalEntity.id,
-    service: originalEntity.service,
-    issueId: originalEntity.issueId,
-  }, targetService)
-}
+api.generateMirrorSignature = (originalEntity: Entity, targetService): string => api.getMetaAsEntityHtmlComment ({
+  id: originalEntity.id,
+  service: originalEntity.service,
+  issueId: originalEntity.issueId,
+}, targetService)
 
 api.getMetaAsEntityHtmlComment = (meta: Object, targetService: string): string => {
-  let entityHtmlComment = api.wrapStringToHtmlComment (
-    `${mirrorMetaVarName}=${JSON.stringify (meta)}`)
+  const entityHtmlComment = api.wrapStringToHtmlComment (
+      `${mirrorMetaVarName}=${JSON.stringify (meta)}`)
 
   switch (targetService) {
     case "youtrack": return `\n\n{html}${entityHtmlComment}{html}`
@@ -53,9 +51,7 @@ api.getMetaAsEntityHtmlComment = (meta: Object, targetService: string): string =
   }
 },
 
-api.wrapStringToHtmlComment = (str: string): string => {
-  return `<!--${str}-->`
-}
+api.wrapStringToHtmlComment = (str: string): string => `<!--${str}-->`
 
 api.generateRandomIssue = (service: string): Issue => ({
   id: Math.random ().toString (),
@@ -71,6 +67,22 @@ api.generateRandomComment = (service: string): IssueComment => ({
   service,
 })
 
+api.throwIfValueNotAllowed = (value, allowed: Array): void => {
+  if (allowed.indexOf (value) === -1)
+    throw `Parameter \`${value}\` has to be: ${allowed.join (" | ")}`
+}
+
+api.formatTimestampAsDuration = (ts: number): string =>
+  [ts / 3600, ts % 3600 / 60, ts % 60].map((p) => Math.floor(p)).join (":")
+
+api.getIndexAfterLast = (str: string, inStr: string): number =>
+  inStr.lastIndexOf (str) + str.length
+
+api.getIssueIdFromRequestBody = (sourceService: string, reqBody: Object): string | void => {
+  if (sourceService === "youtrack") return reqBody.issueId.toString ()
+  if (sourceService === "github") return reqBody.issue && reqBody.issue.number.toString ()
+}
+
 export default api
 export const getUniqueEntityId = api.getUniqueEntityId
 export const getMeta = api.getMeta
@@ -81,3 +93,7 @@ export const getMetaAsEntityHtmlComment = api.getMetaAsEntityHtmlComment
 export const wrapStringToHtmlComment = api.wrapStringToHtmlComment
 export const generateRandomIssue = api.generateRandomIssue
 export const generateRandomComment = api.generateRandomComment
+export const throwIfValueNotAllowed = api.throwIfValueNotAllowed
+export const formatTimestampAsDuration = api.formatTimestampAsDuration
+export const getIndexAfterLast = api.getIndexAfterLast
+export const getIssueIdFromRequestBody = api.getIssueIdFromRequestBody
