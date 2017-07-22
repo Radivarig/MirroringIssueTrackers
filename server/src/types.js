@@ -46,6 +46,9 @@ export type EntityMapping = {
   originalService: string | void,
   services: Array<EntityService>,
 }
+
+export type Service = "github" | "youtrack"
+
 export type DoSingleEntityAction =
   "created" |
   "updated" |
