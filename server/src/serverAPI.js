@@ -63,7 +63,7 @@ const log = (...args) => {
     console.log(...args) // eslint-disable-line no-console
 }
 
-export const webhookHandler = {
+const webhookHandler = {
   handleRequest: async (service, req, res) => {
     if (service === "youtrack") {
       // respond so that youtrack doesn't hang... (opened an issue about it)
@@ -1702,3 +1702,5 @@ export const webhookHandler = {
     return comment
   },
 }
+
+export default webhookHandler
