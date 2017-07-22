@@ -24,7 +24,7 @@ export default class EntityIdsHolder {
 
     for (const entity of entities) {
       const uniqueId: string = getUniqueEntityId (entity)
-      this.obj[uniqueId] = true
+      this.obj[uniqueId] = entity
     }
   }
 
