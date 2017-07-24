@@ -9,33 +9,39 @@ import {
 export default class EntityIdsHolder {
   obj: Object = {}
 
+  constructor (toClone: EntityIdsHolder | void) {
+    if (toClone)
+      Object.assign (this.obj, toClone.obj)
+  }
+
   contains (entity: EntityInfo): boolean {
     const uniqueId: string = getUniqueEntityId (entity)
     return this.obj[uniqueId] !== undefined
+  }
+
+  reset () {
+    this.obj = {}
+  }
+  get list (): Array<EntityInfo> {
+    return Object.getOwnPropertyNames (this.obj).map ((n) => this.obj[n])
+  }
+
+  get (entity: EntityInfo) {
+    const uniqueId: string = getUniqueEntityId (entity)
+    return this.obj[uniqueId]
   }
 
   get length (): number {
     return Object.keys(this.obj).length
   }
 
-  add (entities: EntityInfo | Array <EntityInfo>): void {
-    if (!Array.isArray (entities))
-      entities = [entities]
-
-    for (const entity of entities) {
-      const uniqueId: string = getUniqueEntityId (entity)
-      this.obj[uniqueId] = entity
-    }
+  add (entity: EntityInfo): void {
+    const uniqueId: string = getUniqueEntityId (entity)
+    this.obj[uniqueId] = entity
   }
 
-  remove (entities: EntityInfo | Array <EntityInfo>): void {
-    if (!Array.isArray (entities))
-      entities = [entities]
-
-    for (const entity of entities) {
-      const uniqueId: string = getUniqueEntityId (entity)
-      delete this.obj[uniqueId]
-    }
+  remove (entity: EntityInfo): void {
+    const uniqueId: string = getUniqueEntityId (entity)
+    delete this.obj[uniqueId]
   }
-
 }
