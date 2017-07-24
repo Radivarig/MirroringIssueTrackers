@@ -5,6 +5,7 @@ import {
   IssueCommentInfo,
   IssueInfo,
   EntityInfo,
+  Service,
 } from './types'
 
 import {
@@ -49,13 +50,13 @@ api.getOriginalInfo = (entity: Entity): IssueInfo => {
   }
 }
 
-api.generateMirrorSignature = (originalEntity: Entity, targetService): string => api.getMetaAsEntityHtmlComment ({
+api.generateMirrorSignature = (originalEntity: Entity, targetService: Service): string => api.getMetaAsEntityHtmlComment ({
   id: originalEntity.id,
   service: originalEntity.service,
   issueId: originalEntity.issueId,
 }, targetService)
 
-api.getMetaAsEntityHtmlComment = (meta: Object, targetService: string): string => {
+api.getMetaAsEntityHtmlComment = (meta: Object, targetService: Service): string => {
   const entityHtmlComment = api.wrapStringToHtmlComment (
       `${mirrorMetaVarName}=${JSON.stringify (meta)}`)
 
@@ -113,6 +114,6 @@ export const formatTimestampAsDuration = api.formatTimestampAsDuration
 export const getIndexAfterLast = api.getIndexAfterLast
 export const getIssueIdFromRequestBody = api.getIssueIdFromRequestBody
 
-export const getIsOriginalEqualToMirror = serverAPI.getIsOriginalEqualToMirror
+export const isOriginalEqualToMirror = serverAPI.isOriginalEqualToMirror
 export const areLabelsEqual = serverAPI.areLabelsEqual
 export const getPreparedMirrorEntityForUpdate = serverAPI.getPreparedMirrorEntityForUpdate

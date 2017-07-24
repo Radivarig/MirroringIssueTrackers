@@ -12,7 +12,7 @@ import {
   isOriginal,
   getOriginalInfo,
   getIssueIdFromRequestBody,
-  getIsOriginalEqualToMirror,
+  isOriginalEqualToMirror,
   areLabelsEqual,
   getPreparedMirrorEntityForUpdate,
 } from './MirroringAPI.js'
@@ -136,7 +136,7 @@ export default class MirroringEngine {
         }
         else {
           // if orig not equal to mirror
-          if (!getIsOriginalEqualToMirror (issue, issue.mirror)) { // eslint-disable-line
+          if (!isOriginalEqualToMirror (issue, issue.mirror)) { // eslint-disable-line
             log ("Update", entityLog (issue))
             await updateMirror (issue)
           }
@@ -204,7 +204,7 @@ export default class MirroringEngine {
         log ({newMirror})
       }
       else {
-        if (!getIsOriginalEqualToMirror (origComment, origComment.mirror)) { // eslint-disable-line
+        if (!isOriginalEqualToMirror (origComment, origComment.mirror)) { // eslint-disable-line
           log ("Update".green, entityLog (origComment))
           await updateMirror (origComment)
         }
