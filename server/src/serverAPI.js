@@ -7,6 +7,7 @@ import type {
   EntityInfo,
   EntityMapping,
   DoSingleEntityAction,
+  Service,
 } from './types'
 
 import {
@@ -51,59 +52,51 @@ const createdEntityIds = new CreatedEntityIds ()
 const log = (...args) => {console.log(...args)} // eslint-disable-line no-console
 
 const webhookHandler = {
-  getAllIssues: async () => {
-    const allIssues: Array<Issue> = []
-    await Promise.all (services.map (async (service) => {
-      const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service, testTimestamps && testTimestamps[service]) // use this.since
+  getIssues: async (service: Service, since: number | void) => {
+    const projectIssues: Array<Issue> = await webhookHandler.getProjectIssues (service, since)
 
-      log ("Issues count", service, projectIssues.length)
+    let filteredIssues
 
-      let filteredIssues
-
-      switch (service) {
-        case "youtrack": {
-          filteredIssues = projectIssues.filter ((issue) => {
-            // include mirrors
-            if (isOriginal (issue) === false)
-              return true
-
-            // include forcemirror tagged
-            const hasForceMirroringTag = issue.tags && issue.tags.indexOf (forceMirroringTag) !== -1
-            if (hasForceMirroringTag)
-              return true
-
-            // exclude blacklisted
-            const isYoutrackBlacklisted = webhookHandler.getIsIssueBlacklistedByTags (issue)
-            if (isYoutrackBlacklisted)
-              return false
-
-            // exclude sensitive
-            const isSensitive = webhookHandler.getEntityContainsSensitiveInfo (issue)
-            if (isSensitive)
-              return false
-
-            // include all other originals
+    switch (service) {
+      case "youtrack": {
+        filteredIssues = projectIssues.filter ((issue) => {
+          // include mirrors
+          if (isOriginal (issue) === false)
             return true
-          })
-          break
-        }
-        case "github": {
-          // reverse since github sends descending order
-          filteredIssues = projectIssues.reverse ().filter ((issue) => {
-            if (isOriginal (issue))
-              return true
 
-            return !getMeta (issue).deleted
-          })
-        }
-          break
+          // include forcemirror tagged
+          const hasForceMirroringTag = issue.tags && issue.tags.indexOf (forceMirroringTag) !== -1
+          if (hasForceMirroringTag)
+            return true
+
+          // exclude blacklisted
+          const isYoutrackBlacklisted = webhookHandler.getIsIssueBlacklistedByTags (issue)
+          if (isYoutrackBlacklisted)
+            return false
+
+          // exclude sensitive
+          const isSensitive = webhookHandler.getEntityContainsSensitiveInfo (issue)
+          if (isSensitive)
+            return false
+
+          // include all other originals
+          return true
+        })
+        break
       }
+      case "github": {
+        // reverse since github sends descending order
+        filteredIssues = projectIssues.reverse ().filter ((issue) => {
+          if (isOriginal (issue))
+            return true
 
-      log ("Filtered issues count", service, filteredIssues.length)
-
-      allIssues.push (...filteredIssues)
-    }))
-    return allIssues
+          const meta = getMeta (issue) || {}
+          return !meta.deleted
+        })
+      }
+        break
+    }
+    return filteredIssues
   },
 
   getEntitiesWithOriginalsFirst: (sourceList: Array<Entity>): Array<Entity> => {

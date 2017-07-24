@@ -7,6 +7,10 @@ import {
   Service,
 } from './types'
 
+import {
+  services,
+} from '../config/const.config.js'
+
 import EntityIdsHolder from './EntityIdsHolder.js'
 import {
   isOriginal,
@@ -20,7 +24,7 @@ import {
 
 import {
   asyncTimeout,
-  getAllIssues,
+  getIssues,
   deleteEntity,
   getEntity,
 } from './MirroringAPI.async.js'
@@ -41,6 +45,7 @@ const entityLog = (entity: EntityInfo) => `${entity.service}_${entity.id} ${enti
 export default class MirroringEngine {
   inProgress: boolean = false
   issueInfosQueue: EntityIdsHolder = new EntityIdsHolder ()
+  sinceTimestamps: Object = {}
 
   handleWebhook = async (service: Service, req: Object, res: Object): void => {
     if (service === "youtrack") {
@@ -82,7 +87,8 @@ export default class MirroringEngine {
     const issueInfosQueue = new EntityIdsHolder (this.issueInfosQueue)
     this.issueInfosQueue.reset ()
 
-    const allIssues: Array<Issue> = await getAllIssues ()
+    const _allIssues = await Promise.all (services.map (async (service) => await getIssues (service, this.sinceTimestamps[service])))
+    const allIssues: Array<Issue> = _allIssues.reduce ((a,b) => a.concat (b), [])
 
     for (const issue of allIssues) {
       if (issueInfosQueue.contains (issue))
