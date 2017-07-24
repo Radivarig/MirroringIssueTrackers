@@ -123,7 +123,7 @@ const auth: {
   test: AuthConfig,
 } = {...}
 
-export default auths[process.env.ENV]
+export default auths[process.env.NODE_ENV]
 ```
 Test user should be different than production and should have special project/repository just for testing.  
 
