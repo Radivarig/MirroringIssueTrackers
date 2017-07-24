@@ -1452,8 +1452,6 @@ const webhookHandler = {
 
     const counterpartParentIssue: Issue = comment.parent.mirror || comment.parent.original
 
-    console.log ({counterpartParentIssue, targetService})
-
     const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
 
     return await webhookHandler.createComment (preparedComment, counterpartParentIssue)

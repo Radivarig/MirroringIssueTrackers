@@ -175,7 +175,6 @@ export default class MirroringEngine {
         origsStore.add (c)
       else mirrorsStore.add (c)
     }
-    console.log ({counterpartIssue})
     for (const c of counterpartIssue.comments) {
       c.parent = counterpartIssue
       if (isOriginal (c))
