@@ -12,6 +12,7 @@ import type {
 import {
   isOriginal,
   getMeta,
+  doListsContainSameElements,
   generateMirrorSignature,
 } from './MirroringAPI.js'
 
@@ -370,7 +371,7 @@ const webhookHandler = {
   getNameQuote: (entity: Entity, targetService: string): string =>
     `>@${entity.author} commented:\n\n`,
 
-  getPreparedMirrorCommentForUpdate: (comment: IssueComment, targetService: string): Entity => {
+  getPreparedMirrorComment: (comment: IssueComment, targetService: string): Entity => {
     const nameQuote = webhookHandler.getNameQuote (comment, targetService)
     const signature: string = generateMirrorSignature (comment, targetService)
 
@@ -425,14 +426,7 @@ const webhookHandler = {
     return replacedBody
   },
 
-  getPreparedMirrorEntityForUpdate: (entity: Entity): Entity => {
-    const targetService = entity.service === "youtrack" ? "github" : "youtrack"
-    if (webhookHandler.getIsComment (entity))
-      return webhookHandler.getPreparedMirrorCommentForUpdate (entity, targetService)
-    return webhookHandler.getPreparedMirrorIssueForUpdate (entity, targetService)
-  },
-
-  getPreparedMirrorIssueForUpdate: (issue: Issue, targetService: string): Entity => {
+  getPreparedMirror: (issue: Issue, targetService: string): Entity => {
     // todo, switch (issue.service) instead
     let labels = issue.fields || issue.tags ? ["Mirroring"] : undefined
     if (issue.fields)
@@ -456,31 +450,21 @@ const webhookHandler = {
     }
   },
 
-  doListsContainSameElements: (listA: Array, listB: Array): boolean =>
-    (listA.filter ((a) => listB.indexOf (a) === -1).length === 0 &&
-    listB.filter ((b) => listA.indexOf (b) === -1).length === 0),
+  isOriginalEqualToMirrorComment: (originalComment: IssueComment, mirrorComment: IssueComment): boolean => {
+    const preparedOriginal: IssueComment = webhookHandler.getPreparedMirrorComment (originalComment, mirrorComment.service)
+    return preparedOriginal.body === mirrorComment.body
+  },
 
-  areLabelsEqual: (l1: Array = [], l2: Array = []): boolean =>
-    webhookHandler.doListsContainSameElements (l1, l2),
-
-  isOriginalEqualToMirror: (originalEntity: Entity, mirrorEntity: Entity): boolean => {
-    const preparedOriginal: Entity = webhookHandler.getPreparedMirrorEntityForUpdate (originalEntity, mirrorEntity.service)
-
-    // comment
-    if (webhookHandler.getIsComment (originalEntity))
-      return preparedOriginal.body === mirrorEntity.body
-
-    // issue
-    const areLabelsEqual = webhookHandler.areLabelsEqual (preparedOriginal.labels, mirrorEntity.labels)
+  isOriginalEqualToMirror: (originalIssue: Issue, mirrorIssue: Issue): boolean => {
+    const preparedOriginal: Issue = webhookHandler.getPreparedMirror (originalIssue, mirrorIssue.service)
 
     const areEqual = (
-      preparedOriginal.title === mirrorEntity.title &&
-      preparedOriginal.body === mirrorEntity.body &&
-      preparedOriginal.state === mirrorEntity.state &&
-      areLabelsEqual)
+      preparedOriginal.title === mirrorIssue.title &&
+      preparedOriginal.body === mirrorIssue.body &&
+      preparedOriginal.state === mirrorIssue.state &&
+      doListsContainSameElements (preparedOriginal.labels, mirrorIssue.labels))
 
-    // if (!areEqual) log ({preparedOriginal, mirrorEntity, areLabelsEqual})
-
+    // if (!areEqual) log ({preparedOriginal, mirrorIssue})
     return areEqual
   },
 
@@ -578,7 +562,7 @@ const webhookHandler = {
     const targetComment = comment.mirror
     const targetParentIssue = comment.mirror.parent
 
-    const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
+    const preparedComment: IssueComment = webhookHandler.getPreparedMirrorComment (comment, targetService)
 
     const restParams = {
       service: targetService,
@@ -834,8 +818,6 @@ const webhookHandler = {
 
   },
 
-  wrapStringToHtmlComment: (str: string): string => `<!--${str}-->`,
-
   updateMirrorIssue: async (sourceIssue: EntityService, opts: Object = {}) => {
     const targetService = sourceIssue.service === "youtrack" ? "github" : "youtrack"
     let targetEntityService = sourceIssue.mirror || sourceIssue.original
@@ -846,7 +828,7 @@ const webhookHandler = {
 
     const restParams = {service: targetEntityService.service}
 
-    const preparedIssue: Issue = await webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
+    const preparedIssue: Issue = webhookHandler.getPreparedMirror (sourceIssue, targetService)
 
     const skipTitle = opts.skipTitle || isPostCreation
     const skipBody = opts.skipBody || isPostCreation
@@ -909,7 +891,7 @@ const webhookHandler = {
 
     const counterpartParentIssue: Issue = comment.parent.mirror || comment.parent.original
 
-    const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
+    const preparedComment: IssueComment = webhookHandler.getPreparedMirrorComment (comment, targetService)
 
     return await webhookHandler.createComment (preparedComment, counterpartParentIssue)
   },
@@ -995,7 +977,7 @@ const webhookHandler = {
       case "youtrack": targetService = "github"; break
       case "github": targetService = "youtrack"; break
     }
-    const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
+    const preparedIssue: Issue = webhookHandler.getPreparedMirror (sourceIssue, targetService)
 
     return await webhookHandler.createIssue (preparedIssue, targetService)
   },

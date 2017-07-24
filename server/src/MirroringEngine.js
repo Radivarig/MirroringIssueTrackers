@@ -13,7 +13,8 @@ import {
   getOriginalInfo,
   getIssueIdFromRequestBody,
   isOriginalEqualToMirror,
-  areLabelsEqual,
+  isOriginalEqualToMirrorComment,
+  doListsContainSameElements,
   getPreparedMirrorEntityForUpdate,
 } from './MirroringAPI.js'
 
@@ -146,7 +147,7 @@ export default class MirroringEngine {
       else {
         // update original
         const preparedMirror: Issue = getPreparedMirrorEntityForUpdate (issue, issue.original.service)
-        const labelsDiff = !areLabelsEqual (preparedMirror.labels, issue.original.labels)
+        const labelsDiff = !doListsContainSameElements (preparedMirror.labels, issue.original.labels)
         const stateDiff = preparedMirror.state !== issue.original.state
         if (labelsDiff || stateDiff)
           await updateMirror (issue, {skipTitle: true, skipBody: true})
@@ -204,7 +205,7 @@ export default class MirroringEngine {
         log ({newMirror})
       }
       else {
-        if (!isOriginalEqualToMirror (origComment, origComment.mirror)) { // eslint-disable-line
+        if (!isOriginalEqualToMirrorComment (origComment, origComment.mirror)) { // eslint-disable-line
           log ("Update".green, entityLog (origComment))
           await updateMirror (origComment)
         }
