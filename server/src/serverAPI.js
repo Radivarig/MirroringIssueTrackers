@@ -344,10 +344,13 @@ const webhookHandler = {
     return false
   },
 
+  getCounterpartInfo: () => {
+    log ("Temporary fix for hierarchy: getCounterpartInfo has to be assigned to serverAPI")},
+
   getGithubCounterparts: (issueIds: Array<string>): Array<string> =>
     issueIds.map ((issueId) => {
       const knownEntityService = {service: "youtrack", id: issueId}
-      const counterpart = webhookHandler.getEntityService (knownEntityService, "github")
+      const counterpart = webhookHandler.getCounterpartInfo (knownEntityService)
       return counterpart && counterpart.id
     }).filter (Boolean),
 
@@ -464,7 +467,7 @@ const webhookHandler = {
       preparedOriginal.state === mirrorIssue.state &&
       doListsContainSameElements (preparedOriginal.labels, mirrorIssue.labels))
 
-    // if (!areEqual) log ({preparedOriginal, mirrorIssue})
+    if (!areEqual) log ({preparedOriginal, mirrorIssue}, doListsContainSameElements (preparedOriginal.labels, mirrorIssue.labels))
     return areEqual
   },
 

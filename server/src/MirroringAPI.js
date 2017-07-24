@@ -66,7 +66,7 @@ api.getMetaAsEntityHtmlComment = (meta: Object, targetService: Service): string 
   }
 }
 
-api.doListsContainSameElements = (listA: Array, listB: Array): boolean =>
+api.doListsContainSameElements = (listA: Array = [], listB: Array = []): boolean =>
   (listA.filter ((a) => listB.indexOf (a) === -1).length === 0 &&
   listB.filter ((b) => listA.indexOf (b) === -1).length === 0)
 
@@ -117,8 +117,8 @@ export const throwIfValueNotAllowed = api.throwIfValueNotAllowed
 export const formatTimestampAsDuration = api.formatTimestampAsDuration
 export const getIndexAfterLast = api.getIndexAfterLast
 export const getIssueIdFromRequestBody = api.getIssueIdFromRequestBody
+export const doListsContainSameElements = api.doListsContainSameElements
 
 export const isOriginalEqualToMirror = serverAPI.isOriginalEqualToMirror
 export const isOriginalEqualToMirrorComment = serverAPI.isOriginalEqualToMirrorComment
-export const doListsContainSameElements = serverAPI.doListsContainSameElements
 export const getPreparedMirrorEntityForUpdate = serverAPI.getPreparedMirrorEntityForUpdate

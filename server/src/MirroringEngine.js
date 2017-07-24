@@ -15,17 +15,23 @@ import {
   isOriginalEqualToMirror,
   isOriginalEqualToMirrorComment,
   doListsContainSameElements,
-  getPreparedMirrorEntityForUpdate,
+  getPreparedMirror,
 } from './MirroringAPI.js'
 
 import {
   asyncTimeout,
   getAllIssues,
   deleteEntity,
-  createMirror,
   getEntity,
-  updateMirror,
 } from './MirroringAPI.async.js'
+
+// TEMPORARY
+import serverAPI from './serverAPI'
+/*createMirror,
+updateMirror,
+isOriginalEqualToMirror,
+getPreparedMirror,
+*/
 
 import "colors"
 // eslint-disable-next-line no-console
@@ -126,31 +132,37 @@ export default class MirroringEngine {
       }
     }
 
+    // TEMPORARY inject getCounterpartInfo for getting hierarchy
+    serverAPI.getCounterpartInfo = (entity: EntityInfo): EntityInfo | void => {
+      const match = origsStore.get (entity) || mirrorsStore.get (entity)
+      return match.mirror || match.original
+    }
+
     for (const issue of queue.list) {
       log (entityLog (issue))
       if (isOriginal (issue)) {
         if (!issue.mirror) {
           log ("Create", entityLog (issue))
-          const newMirrorInfo: IssueInfo = await createMirror (issue)
+          const newMirrorInfo: IssueInfo = await serverAPI.createMirror (issue)
           const newMirror: Issue = await getEntity (newMirrorInfo)
           issue.mirror = newMirror
         }
         else {
           // if orig not equal to mirror
-          if (!isOriginalEqualToMirror (issue, issue.mirror)) { // eslint-disable-line
+          if (!serverAPI.isOriginalEqualToMirror (issue, issue.mirror)) { // eslint-disable-line
             log ("Update", entityLog (issue))
-            await updateMirror (issue)
+            await serverAPI.updateMirror (issue)
           }
           else log ("Skip", entityLog (issue))
         }
       }
       else {
         // update original
-        const preparedMirror: Issue = getPreparedMirrorEntityForUpdate (issue, issue.original.service)
+        const preparedMirror: Issue = serverAPI.getPreparedMirror (issue, issue.original.service)
         const labelsDiff = !doListsContainSameElements (preparedMirror.labels, issue.original.labels)
         const stateDiff = preparedMirror.state !== issue.original.state
         if (labelsDiff || stateDiff)
-          await updateMirror (issue, {skipTitle: true, skipBody: true})
+          await serverAPI.updateMirror (issue, {skipTitle: true, skipBody: true})
       }
       // delete/create/update comments
       await this.doComments (issue)
@@ -199,7 +211,7 @@ export default class MirroringEngine {
     for (const origComment of origsStore.list) {
       if (!origComment.mirror) {
         log ("Create".magenta, entityLog (origComment))
-        const newMirrorInfo: IssueCommentInfo = await createMirror (origComment)
+        const newMirrorInfo: IssueCommentInfo = await serverAPI.createMirror (origComment)
         const newMirror: IssueComment = await getEntity (newMirrorInfo)
         origComment.mirror = newMirror
         log ({newMirror})
@@ -207,7 +219,7 @@ export default class MirroringEngine {
       else {
         if (!isOriginalEqualToMirrorComment (origComment, origComment.mirror)) { // eslint-disable-line
           log ("Update".green, entityLog (origComment))
-          await updateMirror (origComment)
+          await serverAPI.updateMirror (origComment)
         }
         else log ("Skip", entityLog (origComment))
       }
