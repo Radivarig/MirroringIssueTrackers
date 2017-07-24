@@ -15,6 +15,8 @@ import {
   getMeta,
   doListsContainSameElements,
   generateMirrorSignature,
+  convertMentions as convertMentionsRaw,
+  getTitlePrefix,
 } from './MirroringAPI.js'
 
 import "colors"
@@ -380,47 +382,8 @@ const webhookHandler = {
     }
   },
 
-  getTitlePrefix: (issue: Issue, targetService): string => {
-    switch (targetService) {
-      case "github": return `[${issue.id}] `
-      case "youtrack": return `(#${issue.id}) `
-    }
-  },
-
-  removeNonLettersFromEnd: (str: string): string => {
-    while (str !== "" && str[str.length - 1].match(/[a-z0-9]/i) === null)
-      str = str.substring (0, str.length - 1)
-    return str || ""
-  },
-
   convertMentions: (body, sourceService, targetService): string =>
-    webhookHandler.convertMentionsRaw (body, sourceService, targetService, usernameMapping),
-
-  convertMentionsRaw: (body: string, sourceService: string, targetService: string,
-    _usernameMapping: UsernameMapping): string => {
-    const replacedBody = body.replace (/\B@[a-z0-9.]+/ig, ((m) => {
-      // remove @ symbol
-      m = m.substring (1)
-
-      const username = m && webhookHandler.removeNonLettersFromEnd (m)
-
-      if (username) {
-        const knownUsernameInfo: KnownUsernameInfo = {
-          username,
-          service: sourceService,
-        }
-        const counterpartUsername = _usernameMapping.getUsername (knownUsernameInfo, targetService)
-
-        if (counterpartUsername)
-          return `@${counterpartUsername}`
-      }
-
-      // else break mention
-      return `@'${m}`
-    }))
-
-    return replacedBody
-  },
+    convertMentionsRaw (body, sourceService, targetService, usernameMapping),
 
   getPreparedMirror: (issue: Issue, targetService: string): Entity => {
     // todo, switch (issue.service) instead
@@ -434,7 +397,7 @@ const webhookHandler = {
     const signature = generateMirrorSignature (issue, targetService)
 
     const nameQuote = webhookHandler.getNameQuote (issue, targetService)
-    const titlePrefix = webhookHandler.getTitlePrefix (issue, targetService)
+    const titlePrefix = getTitlePrefix (issue, targetService)
 
     const convertedBody = webhookHandler.convertMentions (nameQuote + issue.body, issue.service, targetService)
 

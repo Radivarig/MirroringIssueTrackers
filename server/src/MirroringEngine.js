@@ -16,10 +16,7 @@ import {
   isOriginal,
   getOriginalInfo,
   getIssueIdFromRequestBody,
-  isOriginalEqualToMirror,
-  isOriginalEqualToMirrorComment,
   doListsContainSameElements,
-  getPreparedMirror,
 } from './MirroringAPI.js'
 
 import {
@@ -223,7 +220,7 @@ export default class MirroringEngine {
         log ({newMirror})
       }
       else {
-        if (!isOriginalEqualToMirrorComment (origComment, origComment.mirror)) { // eslint-disable-line
+        if (!serverAPI.isOriginalEqualToMirrorComment (origComment, origComment.mirror)) { // eslint-disable-line
           log ("Update".green, entityLog (origComment))
           await serverAPI.updateMirror (origComment)
         }

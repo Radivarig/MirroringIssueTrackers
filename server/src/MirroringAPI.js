@@ -12,7 +12,7 @@ import {
   mirrorMetaVarName,
 } from '../config/const.config.js'
 
-import serverAPI from './serverAPI.js'
+import UsernameMapping, {KnownUsernameInfo} from '../src/UsernameMapping.js'
 
 const api = {}
 
@@ -94,12 +94,53 @@ api.throwIfValueNotAllowed = (value, allowed: Array): void => {
 api.formatTimestampAsDuration = (ts: number): string =>
   [ts / 3600, ts % 3600 / 60, ts % 60].map((p) => Math.floor(p)).join (":")
 
-api.getIndexAfterLast = (str: string, inStr: string): number =>
-  inStr.lastIndexOf (str) + str.length
+api.getIndexAfterLast = (str: string, inStr: string): number => {
+  const l = inStr.lastIndexOf (str)
+  return l === -1 ? -1 : l + str.length
+}
 
 api.getIssueIdFromRequestBody = (sourceService: string, reqBody: Object): string | void => {
   if (sourceService === "youtrack") return reqBody.issueId.toString ()
   if (sourceService === "github") return reqBody.issue && reqBody.issue.number.toString ()
+}
+
+api.getTitlePrefix = (issue: Issue, targetService): string => {
+  switch (targetService) {
+    case "github": return `[${issue.id}] `
+    case "youtrack": return `(#${issue.id}) `
+  }
+}
+
+api.removeNonLettersFromEnd = (str: string): string => {
+  while (str !== "" && str[str.length - 1].match(/[a-z0-9]/i) === null)
+    str = str.substring (0, str.length - 1)
+  return str || ""
+}
+
+api.convertMentions = (body: string, sourceService: string, targetService: string,
+  usernameMapping: UsernameMapping): string => {
+  const replacedBody = body.replace (/\B@[a-z0-9.]+/ig, ((m) => {
+    // remove @ symbol
+    m = m.substring (1)
+
+    const username = m && api.removeNonLettersFromEnd (m)
+
+    if (username) {
+      const knownUsernameInfo: KnownUsernameInfo = {
+        username,
+        service: sourceService,
+      }
+      const counterpartUsername = usernameMapping.getUsername (knownUsernameInfo, targetService)
+
+      if (counterpartUsername)
+        return `@${counterpartUsername}`
+    }
+
+    // else break mention
+    return `@'${m}`
+  }))
+
+  return replacedBody
 }
 
 export default api
@@ -118,7 +159,6 @@ export const formatTimestampAsDuration = api.formatTimestampAsDuration
 export const getIndexAfterLast = api.getIndexAfterLast
 export const getIssueIdFromRequestBody = api.getIssueIdFromRequestBody
 export const doListsContainSameElements = api.doListsContainSameElements
-
-export const isOriginalEqualToMirror = serverAPI.isOriginalEqualToMirror
-export const isOriginalEqualToMirrorComment = serverAPI.isOriginalEqualToMirrorComment
-export const getPreparedMirrorEntityForUpdate = serverAPI.getPreparedMirrorEntityForUpdate
+export const getTitlePrefix = api.getTitlePrefix
+export const removeNonLettersFromEnd = api.removeNonLettersFromEnd
+export const convertMentions = api.convertMentions
