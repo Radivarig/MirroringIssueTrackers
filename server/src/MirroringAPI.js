@@ -9,7 +9,9 @@ import {
 
 import {
   mirrorMetaVarName,
-} from '../config/const.config'
+} from '../config/const.config.js'
+
+import serverAPI from './serverAPI.js'
 
 const api = {}
 
@@ -35,6 +37,18 @@ api.getCommentParentInfo = (comment: IssueCommentInfo): IssueInfo => ({
   service: comment.service,
 })
 
+api.getOriginalInfo = (entity: Entity): IssueInfo => {
+  if (api.isOriginal (entity))
+    throw "Expected a mirror"
+  const mirrorMeta = api.getMeta (entity)
+
+  return {
+    id: mirrorMeta.id,
+    service: mirrorMeta.service,
+    issueId: mirrorMeta.issueId,
+  }
+}
+
 api.generateMirrorSignature = (originalEntity: Entity, targetService): string => api.getMetaAsEntityHtmlComment ({
   id: originalEntity.id,
   service: originalEntity.service,
@@ -49,7 +63,7 @@ api.getMetaAsEntityHtmlComment = (meta: Object, targetService: string): string =
     case "youtrack": return `\n\n{html}${entityHtmlComment}{html}`
     case "github": return `\n\n${entityHtmlComment}`
   }
-},
+}
 
 api.wrapStringToHtmlComment = (str: string): string => `<!--${str}-->`
 
@@ -88,6 +102,7 @@ export const getUniqueEntityId = api.getUniqueEntityId
 export const getMeta = api.getMeta
 export const isOriginal = api.isOriginal
 export const getCommentParentInfo = api.getCommentParentInfo
+export const getOriginalInfo = api.getOriginalInfo
 export const generateMirrorSignature = api.generateMirrorSignature
 export const getMetaAsEntityHtmlComment = api.getMetaAsEntityHtmlComment
 export const wrapStringToHtmlComment = api.wrapStringToHtmlComment
@@ -97,3 +112,7 @@ export const throwIfValueNotAllowed = api.throwIfValueNotAllowed
 export const formatTimestampAsDuration = api.formatTimestampAsDuration
 export const getIndexAfterLast = api.getIndexAfterLast
 export const getIssueIdFromRequestBody = api.getIssueIdFromRequestBody
+
+export const getIsOriginalEqualToMirror = serverAPI.getIsOriginalEqualToMirror
+export const areLabelsEqual = serverAPI.areLabelsEqual
+export const getPreparedMirrorEntityForUpdate = serverAPI.getPreparedMirrorEntityForUpdate

@@ -916,7 +916,8 @@ const webhookHandler = {
     return replacedBody
   },
 
-  getPreparedMirrorEntityForUpdate: (entity: Entity, targetService: string): Entity => {
+  getPreparedMirrorEntityForUpdate: (entity: Entity): Entity => {
+    const targetService = entity.service === "youtrack" ? "github" : "youtrack"
     if (webhookHandler.getIsComment (entity))
       return webhookHandler.getPreparedMirrorCommentForUpdate (entity, targetService)
     return webhookHandler.getPreparedMirrorIssueForUpdate (entity, targetService)
@@ -1071,51 +1072,33 @@ const webhookHandler = {
   },
 
   updateMirrorComment: async (comment: IssueComment) => {
-    await Promise.all (services.map (async (targetService) => {
-      if (targetService === comment.service)
-        return
+    const targetService = comment.service === "youtrack" ? "github" : "youtrack"
 
-      const knownIssueService: EntityService | void = {
-        service: comment.service,
-        id: comment.issueId,
-      }
-      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownIssueService, targetService)
+    const targetComment = comment.mirror
+    const targetParentIssue = comment.mirror.parent
 
-      const knownCommentService: EntityService | void = {
-        service: comment.service,
-        id: comment.id,
-        issueId: comment.issueId,
-      }
-      const targetCommentService: EntityService | void = webhookHandler.getEntityService (knownCommentService, targetService)
+    const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
 
-      // log ({targetService, knownIssueService, targetIssueService, knownCommentService, targetCommentService})
+    const restParams = {
+      service: targetService,
+    }
 
-      if (!targetIssueService || ! targetCommentService)
-        return
+    switch (targetService) {
+      case "youtrack":
+        restParams.method = "put"
+        restParams.url = `issue/${targetParentIssue.id}/comment/${targetComment.id}`
+        restParams.data = {text: preparedComment.body}
+        break
+      case "github":
+        restParams.method = "patch"
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/comments/${targetComment.id}`
+        restParams.data = {body: preparedComment.body}
+        break
+    }
 
-      const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
-
-      const restParams = {
-        service: targetService,
-      }
-
-      switch (targetService) {
-        case "youtrack":
-          restParams.method = "put"
-          restParams.url = `issue/${targetIssueService.id}/comment/${targetCommentService.id}`
-          restParams.data = {text: preparedComment.body}
-          break
-        case "github":
-          restParams.method = "patch"
-          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/comments/${targetCommentService.id}`
-          restParams.data = {body: preparedComment.body}
-          break
-      }
-
-      await integrationRest (restParams)
-      .then ((response) => response.body)
-      .catch ((err) => {throw err})
-    }))
+    await integrationRest (restParams)
+    .then ((response) => response.body)
+    .catch ((err) => {throw err})
   },
 
   getComments: async (sourceIssue: EntityService): Array<IssueComment> => {
@@ -1225,7 +1208,19 @@ const webhookHandler = {
     if (!rawIssue)
       return
 
-    return webhookHandler.getFormatedIssue (issueService.service, rawIssue)
+    const issue: Issue = webhookHandler.getFormatedIssue (issueService.service, rawIssue)
+
+    // add comments
+    const issueComments: Array<IssueComment> = await webhookHandler.getComments (issue)
+
+    issue.comments = issueComments
+    return issue
+  },
+
+  getEntity: async (entityService: EntityService): Entity | void => {
+    if (webhookHandler.getIsComment (entityService))
+      return await webhookHandler.getComment (entityService)
+    return await webhookHandler.getIssue (entityService)
   },
 
   getLabelsFromTags: (tags/*: Array<{name: string, value: string}>*/): Array<string> =>
@@ -1385,105 +1380,83 @@ const webhookHandler = {
   },
 
   updateMirrorIssue: async (sourceIssue: EntityService, opts: Object = {}) => {
-    services.forEach (async (targetService) => {
-      if (targetService === sourceIssue.service)
-        return
+    const targetService = sourceIssue.service === "youtrack" ? "github" : "youtrack"
+    let targetEntityService = sourceIssue.mirror || sourceIssue.original
 
-      let targetEntityService: EntityService | void = webhookHandler.getEntityService (sourceIssue, targetService)
+    const isPostCreation = opts.targetEntityService && opts.targetEntityService.service === targetService
+    if (isPostCreation)
+      targetEntityService = opts.targetEntityService
 
-      // todo refactor, add updateIssue
-      // this will be passed from createIssue to update state and labels right after creation
-      const isPostCreation = opts.targetEntityService && opts.targetEntityService.service === targetService
-      if (isPostCreation)
-        targetEntityService = opts.targetEntityService
+    const restParams = {service: targetEntityService.service}
 
-      if (!targetEntityService) {
-        log (`no target (${targetService}) for (${sourceIssue.service}:${sourceIssue.id})`)
-        return
-      }
+    const preparedIssue: Issue = await webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
-      const restParams = {service: targetEntityService.service}
+    const skipTitle = opts.skipTitle || isPostCreation
+    const skipBody = opts.skipBody || isPostCreation
 
-      const preparedIssue: Issue = await webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
+    switch (sourceIssue.service) {
+      case "youtrack": {
+        restParams.method = "patch"
+        restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetEntityService.id}`
 
-      const skipTitle = opts.skipTitle || isPostCreation
-      const skipBody = opts.skipBody || isPostCreation
-
-      switch (sourceIssue.service) {
-        case "youtrack": {
-          restParams.method = "patch"
-          restParams.url = `repos/${auth.github.user}/${auth.github.project}/issues/${targetEntityService.id}`
-
-          restParams.data = {
-            labels: preparedIssue.labels,
-            state: preparedIssue.state,
-          }
-          if (!skipTitle) restParams.data.title = preparedIssue.title
-          if (!skipBody) restParams.data.body = preparedIssue.body
-
-          break
+        restParams.data = {
+          labels: preparedIssue.labels,
+          state: preparedIssue.state,
         }
-        case "github": {
-          if (!skipTitle || !skipBody) {
-            restParams.method = "post"
-            restParams.url = `issue/${targetEntityService.id}`
-            restParams.query = {
-              project: auth.youtrack.project,
-            }
-            if (!skipTitle) restParams.query.summary = preparedIssue.title
-            if (!skipBody) restParams.query.description = preparedIssue.body
+        if (!skipTitle) restParams.data.title = preparedIssue.title
+        if (!skipBody) restParams.data.body = preparedIssue.body
+
+        break
+      }
+      case "github": {
+        if (!skipTitle || !skipBody) {
+          restParams.method = "post"
+          restParams.url = `issue/${targetEntityService.id}`
+          restParams.query = {
+            project: auth.youtrack.project,
           }
+          if (!skipTitle) restParams.query.summary = preparedIssue.title
+          if (!skipBody) restParams.query.description = preparedIssue.body
+        }
 
           // todo: shoulnd't this override with "Open" every time..
-          const applyStateParams = {
-            service: targetEntityService.service,
-            method: "post",
-            url: `issue/${targetEntityService.id}/execute`,
-            query: {
-              command: `State ${preparedIssue.state === "open" ? "Open" : closedStateField}`,
-            },
-          }
+        const applyStateParams = {
+          service: targetEntityService.service,
+          method: "post",
+          url: `issue/${targetEntityService.id}/execute`,
+          query: {
+            command: `State ${preparedIssue.state === "open" ? "Open" : closedStateField}`,
+          },
+        }
 
           // apply new state
-          await integrationRest(applyStateParams)
+        await integrationRest(applyStateParams)
           .then ((response) => response.body)
           .catch ((err) => {throw err})
 
-          break
-        }
+        break
       }
+    }
 
       // if there is nothing to set
-      if (sourceIssue.service === "github" && (skipTitle && skipBody))
-        return
+    if (sourceIssue.service === "github" && (skipTitle && skipBody))
+      return
 
-      return await integrationRest(restParams)
+    return await integrationRest(restParams)
       .then ((response) => response.body)
       .catch ((err) => {throw err})
-    })
-
   },
 
   createMirrorComment: async (comment: IssueComment): EntityService => {
-    await Promise.all (services.map (async (targetService) => {
-      if (targetService === comment.service)
-        return
+    const targetService = comment.service === "youtrack" ? "github" : "youtrack"
 
-      const knownEntityService: EntityService = {
-        service: comment.service,
-        id: comment.issueId,
-      }
-      const targetIssueService: EntityService | void = webhookHandler.getEntityService (knownEntityService, targetService)
+    const counterpartParentIssue: Issue = comment.parent.mirror || comment.parent.original
 
-      if (!targetIssueService) {
-        log ("No comment issue found", {comment, targetService})
-        throw "Error"
-      }
+    console.log ({counterpartParentIssue, targetService})
 
-      const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
+    const preparedComment: IssueComment = webhookHandler.getPreparedMirrorCommentForUpdate (comment, targetService)
 
-      await webhookHandler.createComment (preparedComment, targetIssueService)
-    }))
+    return await webhookHandler.createComment (preparedComment, counterpartParentIssue)
   },
 
   createComment: async (comment: IssueComment, parentIssueService: EntityService): EntityService => {
@@ -1565,15 +1538,14 @@ const webhookHandler = {
   },
 
   createMirrorIssue: async (sourceIssue: Issue): EntityService => {
-    await Promise.all (services.map (async (targetService) => {
-      if (targetService === sourceIssue.service)
-        return
+    let targetService
+    switch (sourceIssue.service) {
+      case "youtrack": targetService = "github"; break
+      case "github": targetService = "youtrack"; break
+    }
+    const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
 
-      const preparedIssue: Issue = webhookHandler.getPreparedMirrorIssueForUpdate (sourceIssue, targetService)
-
-      return await webhookHandler.createIssue (preparedIssue, targetService)
-    }))
-
+    return await webhookHandler.createIssue (preparedIssue, targetService)
   },
 
   createIssue: async (issue: Issue, targetService: string): EntityService => {
