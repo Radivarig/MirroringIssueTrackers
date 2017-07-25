@@ -17,6 +17,10 @@ import {
   generateMirrorSignature,
   convertMentions as convertMentionsRaw,
   getTitlePrefix,
+  throwIfValueNotAllowed,
+  getIndexAfterLast,
+  formatTimestampAsDuration,
+  getMetaAsEntityHtmlComment,
 } from './MirroringAPI.js'
 
 import "colors"
@@ -25,12 +29,6 @@ import normalizeNewline from 'normalize-newline'
 import integrationRest from "./integrationRest"
 
 let startTime
-
-import {
-  asyncTimeout,
-  throwIfValueNotAllowed,
-  getIndexAfterLast,formatTimestampAsDuration,
-} from './helpers'
 
 // import auth from "../config/auth.config"
 const auth: AuthConfig = require ("../config/auth.config").default
@@ -47,7 +45,6 @@ import UsernameMapping, {UsernameInfo, KnownUsernameInfo} from './UsernameMappin
 const usernameInfos: Array<UsernameInfo> = require('../config/usernames.config').default
 const usernameMapping = new UsernameMapping (usernameInfos)
 
-let testTimestamps
 import CreatedEntityIds from "./CreatedEntityIds"
 const createdEntityIds = new CreatedEntityIds ()
 
@@ -457,7 +454,7 @@ const webhookHandler = {
         await Promise.all (comments.map (
           async (comment) => await webhookHandler.deleteCommentInstance (comment)))
 
-        const signature: string = webhookHandler.getMetaAsIssueCommentHtmlComment ("github", {deleted: true})
+        const signature: string = getMetaAsEntityHtmlComment ({deleted: true}, "github")
         const data = {
           ...issue,
           title: '(Issue removed)',
@@ -782,8 +779,15 @@ const webhookHandler = {
     let targetEntityService = sourceIssue.mirror || sourceIssue.original
 
     const isPostCreation = opts.targetEntityService && opts.targetEntityService.service === targetService
+
     if (isPostCreation)
       targetEntityService = opts.targetEntityService
+
+    if (!targetEntityService) {
+      if (!opts.targetEntityService)
+        log ("No target entity found")
+      return
+    }
 
     const restParams = {service: targetEntityService.service}
 
@@ -988,6 +992,7 @@ const webhookHandler = {
       service: targetService,
       id: newIssueId,
     }
+
     // update fields/labels
     await webhookHandler.updateMirrorIssue (issue, {
       targetEntityService: newEntityService,
