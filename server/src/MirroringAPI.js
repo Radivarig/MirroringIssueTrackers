@@ -143,6 +143,15 @@ api.convertMentions = (body: string, sourceService: string, targetService: strin
   return replacedBody
 }
 
+api.asyncTimeout = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+api.getCounterpartService = (service: Service) => {
+  switch (service) {
+    case "youtrack": return "github"
+    case "github": return "youtrack"
+  }
+}
+
 export default api
 export const getUniqueEntityId = api.getUniqueEntityId
 export const getMeta = api.getMeta
@@ -162,3 +171,5 @@ export const doListsContainSameElements = api.doListsContainSameElements
 export const getTitlePrefix = api.getTitlePrefix
 export const removeNonLettersFromEnd = api.removeNonLettersFromEnd
 export const convertMentions = api.convertMentions
+export const asyncTimeout = api.asyncTimeout
+export const getCounterpartService = api.getCounterpartService

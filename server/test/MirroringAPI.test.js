@@ -15,6 +15,7 @@ import {
   getIndexAfterLast,
   getTitlePrefix,
   convertMentions,
+  getCounterpartService,
 } from '../src/MirroringAPI.js'
 
 import {
@@ -194,4 +195,10 @@ describe('MirroringAPI', () => {
     })
   })
 
+  describe ('getCounterpartService', () => {
+    it ('return github for youtrack and youtrack for github', () => {
+      expect (getCounterpartService ("github")).to.equal ("youtrack")
+      expect (getCounterpartService ("youtrack")).to.equal ("github")
+    })
+  })
 })
