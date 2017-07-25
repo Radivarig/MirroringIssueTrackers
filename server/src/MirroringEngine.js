@@ -41,6 +41,7 @@ const entityLog = (entity: EntityInfo) => `${entity.service}_${entity.id} ${enti
 
 export default class MirroringEngine {
   inProgress: boolean = false
+  didFinalRun: boolean = false
   issueInfosQueue: EntityIdsHolder = new EntityIdsHolder ()
   sinceTimestamps: Object = {}
 
@@ -116,6 +117,9 @@ export default class MirroringEngine {
         queue.add (issue)
     }
     else {
+      // reset on webhook to repeat once at end
+      this.didFinalRun = false
+
       // pick only issues from queue, select latest counterpart if both
       for (const issueInfo of issueInfosQueue.list) {
         const origIssue = origsStore.get (issueInfo)
@@ -176,6 +180,10 @@ export default class MirroringEngine {
     if (this.issueInfosQueue.length > 0)
       return await this.doMirroring ()
 
+    if (!this.didFinalRun) {
+      this.didFinalRun = true
+      return await this.doMirroring ()
+    }
     log ("Done")
   }
 
