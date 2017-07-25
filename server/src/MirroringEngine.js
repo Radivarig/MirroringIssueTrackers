@@ -17,10 +17,10 @@ import {
   getOriginalInfo,
   getIssueIdFromRequestBody,
   doListsContainSameElements,
+  asyncTimeout,
 } from './MirroringAPI.js'
 
 import {
-  asyncTimeout,
   getIssues,
   deleteEntity,
   getEntity,

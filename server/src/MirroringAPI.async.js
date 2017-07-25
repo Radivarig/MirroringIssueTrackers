@@ -2,8 +2,6 @@ import serverAPI from './serverAPI.js'
 
 export default serverAPI
 
-export const asyncTimeout = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
 export const getIssues = serverAPI.getIssues
 export const deleteEntity = serverAPI.deleteEntity
 export const createMirror = serverAPI.createMirror
