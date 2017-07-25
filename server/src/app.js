@@ -10,7 +10,7 @@ import MirroringEngine from './MirroringEngine.js'
 const mirroringEngine = new MirroringEngine ()
 
 // eslint-disable-next-line no-undef
-if (process.env.ENV === "production")
+if (process.env.NODE_ENV === "production")
   mirroringEngine.doMirroring ()
 
 const allowCrossDomain = function (req, res, next) {
