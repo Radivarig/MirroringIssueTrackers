@@ -142,7 +142,8 @@ export default class MirroringEngine {
     // TEMPORARY inject getCounterpartInfo for getting hierarchy
     serverAPI.getCounterpartInfo = (entity: EntityInfo): EntityInfo | void => {
       const match = origsStore.get (entity) || mirrorsStore.get (entity)
-      return match.mirror || match.original
+
+      return match && (match.mirror || match.original)
     }
 
     for (const issue of queue.list) {
