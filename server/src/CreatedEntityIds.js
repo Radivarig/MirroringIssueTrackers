@@ -4,7 +4,7 @@ import {
 
 import {
   getUniqueEntityId,
-} from "./entityHelpers"
+} from "./MirroringAPI.js"
 
 export default class CreatedEntityIds {
   obj: Object = {}

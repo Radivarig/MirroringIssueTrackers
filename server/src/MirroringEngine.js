@@ -225,7 +225,6 @@ export default class MirroringEngine {
         const newMirrorInfo: IssueCommentInfo = await serverAPI.createMirror (origComment)
         const newMirror: IssueComment = await getEntity (newMirrorInfo)
         origComment.mirror = newMirror
-        log ({newMirror})
       }
       else {
         if (!serverAPI.isOriginalEqualToMirrorComment (origComment, origComment.mirror)) { // eslint-disable-line

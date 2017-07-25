@@ -420,7 +420,7 @@ const webhookHandler = {
       preparedOriginal.state === mirrorIssue.state &&
       doListsContainSameElements (preparedOriginal.labels, mirrorIssue.labels))
 
-    if (!areEqual) log ({preparedOriginal, mirrorIssue}, doListsContainSameElements (preparedOriginal.labels, mirrorIssue.labels))
+    // if (!areEqual) log ({preparedOriginal, mirrorIssue}, doListsContainSameElements (preparedOriginal.labels, mirrorIssue.labels))
     return areEqual
   },
 
