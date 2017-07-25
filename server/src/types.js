@@ -1,43 +1,54 @@
 export type AuthConfig = {
   youtrack: {
-    url: string;
-    token: string;
-    project: string;
-  };
+    url: string,
+    token: string,
+    project: string,
+  },
   github: {
-    url: string;
-    token: string;
-    user: string;
-    project: string;
-  };
+    url: string,
+    token: string,
+    user: string,
+    project: string,
+  },
 }
 
-// todo: add url
-export type Issue = {
-  id: string;
-  title: string;
-  body: string;
-  service: string;
-}
-export type IssueComment = {
-  id: string;
-  body: string;
-  service: string;
-  issueId: string;
-}
-export type Entity = Issue | IssueComment
-
-export type EntityService = {
+export type IssueInfo = {
   service: string,
   id: string,
-  // this is for comment parent
-  issueId: string | void;
 }
+
+export type IssueCommentInfo = {
+  ...IssueInfo,
+  // comment parent
+  issueId: string,
+}
+
+export type EntityInfo = IssueInfo | IssueCommentInfo
+
+// for deprecation
+export type EntityService = EntityInfo
+
+export type Issue = {
+  ...IssueInfo,
+  title: string,
+  body: string,
+}
+
+export type IssueComment = {
+  ...IssueCommentInfo,
+  body: string,
+}
+
+export type Entity = Issue | IssueComment
+
 export type EntityMapping = {
-  flag: string | void;
-  originalService: string | void;
-  services: Array<EntityService>;
+  flag: string | void,
+  originalService: string | void,
+  services: Array<EntityService>,
 }
+
+export type Service = "github" | "youtrack"
+
 export type DoSingleEntityAction =
   "created" |
   "updated" |

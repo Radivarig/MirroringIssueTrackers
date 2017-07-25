@@ -1,18 +1,18 @@
 import auth from '../config/auth.config'
 import request from 'superagent'
 import path from 'path'
-import {throwIfValueNotAllowed} from './helpers'
+
+import {
+  Service,
+} from "./types"
 
 export default async (opts) => {
   // options types
-  const service: string = opts.service
+  const service: Service = opts.service
   const method: string = opts.method && opts.method.toLowerCase()
   const url: string = opts.url
   const query: Object | void = opts.query
   const data: Object | void = opts.data
-
-  throwIfValueNotAllowed (method, ["get", "put", "post", "patch", "delete"])
-  throwIfValueNotAllowed (service, ["youtrack", "github"])
 
   let baseUrl
   let protocol
