@@ -7,8 +7,8 @@
   "scripts": {
     "build": "webpack --progress --build",
     "watch": "webpack --progress --watch",
-    "start": "nodemon ./src/server.js --exec babel-node --trace-warnings",
-    "start:build": "nodemon ./build/backend.js",
+    "start:nodemon": "nodemon ./src/server.js --exec babel-node --trace-warnings",
+    "start:production": "until NODE_ENV=production babel-node src/server.js; do echo 'Crashed, restarting..'; sleep 60; done",
     "test": "ENV=test mocha --bail --timeout=0 --compilers js:babel-core/register",
     "test:watch": "ENV=test mocha --bail --timeout=0 --compilers js:babel-core/register --watch"
   },
