@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "mirroring-issue-trackers-server",
   "author": "Reslav Hollos",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "webpack --progress --build",
     "watch": "webpack --progress --watch",
