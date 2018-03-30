@@ -4,4 +4,4 @@ npm-debug.log
 config/
 bundle.js*
 
-server/build/
+build/
